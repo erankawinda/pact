@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.env*
+!.env.example
+*.log
+coverage/
+supabase/.temp/
+
+# Local tooling and generated browser evidence
+.DS_Store
+.idea/
+.vscode/
+qa/artifacts/
+test-results/
+playwright-report/
+
+# Deployment bundles, data exports and credentials never belong in source
+*.zip
+*.csv
+*.dump
+*.backup
+*.pem
+*.key
+backups/
+exports/
+private/
+.wrangler/
