@@ -31,7 +31,15 @@ async function fixture({empty=false,signedIn=true,width=390,scheme='light'}={}){
 }
 const nav=(page,name)=>page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true});
 async function layout(page,label){const v=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));assert.ok(v.scroll<=v.width,`${label}: ${JSON.stringify(v)}`);}
-async function shot(page,label){await page.screenshot({path:`${out}/${label}.png`,fullPage:true,animations:'disabled'});}
+async function shot(page,label){
+ await page.screenshot({path:`${out}/${label}.png`,fullPage:true,animations:'disabled'});
+ // Matching phone viewports keep the README gallery aligned without stretching.
+ if(['expense-review','shopping-needed','balances-dark'].includes(label)){
+  assert.deepEqual(page.viewportSize(),{width:390,height:844});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.screenshot({path:`${out}/${label}-preview.png`,fullPage:false,animations:'disabled'});
+ }
+}
 async function test(name,run){const start=Date.now();try{await run();results.push({name,status:'passed',ms:Date.now()-start});console.log(`PASS ${name}`);}catch(e){console.error(`FAIL ${name}`,e);results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync('qa/artifacts/browser-results.json',JSON.stringify(results,null,2));}}
 async function addExpense(page,{amount='10.01',name='Shared snack',people=['Blake','Casey']}={}){await page.getByRole('button',{name:'Add expense',exact:true}).click();await page.getByLabel('Amount · AUD').fill(amount);await page.getByLabel('What was it for?').fill(name);for(const who of people)await page.getByRole('checkbox',{name:who,exact:true}).check();}
 async function done(f){assert.deepEqual(f.state.errors,[]);assert.deepEqual(f.state.unexpected,[]);await f.close();}

@@ -16,6 +16,8 @@ The ten browser scenarios cover navigation, responsive layouts, light/dark acces
 
 Generated results and screenshots go to `qa/artifacts/`, which is ignored by Git. Selected synthetic screenshots in `docs/images/` illustrate the app; they are not household records.
 
+The harness also captures `*-preview.png` versions of the three README screens at the same 390 × 844 phone viewport. When refreshing the gallery, review the generated images and copy the full screenshots and matching previews into `docs/images/`. Keep previews at their original aspect ratio; the README links them to the complete screens.
+
 Optional local overrides:
 
 - `PACT_PLAYWRIGHT_MODULE`: absolute path to another Playwright module.
