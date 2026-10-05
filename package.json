@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm test && npm run build"
+    "check": "npm test && npm run build",
+    "test:browser": "node qa/browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
@@ -23,6 +24,8 @@
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "axe-core": "4.13.0",
+    "playwright": "1.63.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "8.3.2"

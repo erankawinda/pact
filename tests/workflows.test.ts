@@ -1,0 +1,88 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import {randomUUID} from 'node:crypto';
+
+test('household workflows preserve cents, history, identity, permissions and retry safety',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ await db.exec(`create role anon;create role authenticated;create schema auth;
+ create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
+ for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
+ const a=randomUUID(),b=randomUUID(),c=randomUUID();
+ await db.query("insert into auth.users(id,email,email_confirmed_at) values($1,'a@example.test',now()),($2,'b@example.test',now()),($3,'c@example.test',now())",[a,b,c]);
+ async function as(id:string){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec('set role authenticated');}
+ async function scalar<T=string>(sql:string,args:unknown[]=[]){return Object.values((await db.query<Record<string,T>>(sql,args)).rows[0])[0];}
+ const state=(g:string)=>scalar<any>('select public.get_household_state($1,50)',[g]);
+ const balance=async(g:string)=>Object.fromEntries((await state(g)).balances.map((v:any)=>[v.user_id,Number(v.cents)]));
+ const createRequest=randomUUID();await as(a);
+ const home=await scalar("select public.create_space('Home','household',null,'{}',$1)",[createRequest]);
+ assert.equal(await scalar("select public.create_space('Home','household',null,'{}',$1)",[createRequest]),home);
+ const token=await scalar('select public.create_invitation($1,$2)',[home,'b@example.test']);await as(b);await scalar('select public.accept_invitation($1)',[token]);await as(a);
+ const input={p_group:home,p_request:randomUUID(),p_description:'Groceries',p_amount:1001,p_payer:a,p_people:[a,b].sort(),p_mode:'equal',p_exact:null,p_date:'2026-10-05',p_category:'groceries',p_note:''};
+ const save=(i:unknown,replaces:string|null=null,version:number|null=null,reason='',purchase:string|null=null)=>scalar('select public.save_expense($1::jsonb,$2,$3,$4,$5)',[JSON.stringify(i),replaces,version,reason,purchase]);
+ const expense=await save(input);assert.equal(await save(input),expense);
+ assert.equal((await state(home)).expenses.length,1);
+ let bal=await balance(home);assert.equal(bal[a]+bal[b],0);const debt=-bal[b];assert.ok([500,501].includes(debt));
+ await as(b);const paymentRequest=randomUUID();const payment=await scalar("select public.record_payment($1,$2,$3,'2026-10-05','Bank transfer',$4)",[home,a,debt,paymentRequest]);
+ assert.deepEqual(await balance(home),bal,'pending payment does not affect balances');
+ await assert.rejects(()=>scalar("select public.payment_action($1,$2,'confirm',1,'',$3)",[home,payment,randomUUID()]),/invalid_action/);
+ await as(a);const confirmRequest=randomUUID();await scalar("select public.payment_action($1,$2,'confirm',1,'',$3)",[home,payment,confirmRequest]);
+ assert.deepEqual(await balance(home),{[a]:0,[b]:0});
+ await scalar("select public.payment_action($1,$2,'confirm',1,'',$3)",[home,payment,confirmRequest]);
+ await assert.rejects(()=>scalar("select public.payment_action($1,$2,'confirm',1,'',$3)",[home,payment,randomUUID()]),/stale_version/);
+ await scalar("select public.payment_action($1,$2,'reverse',2,'Wrong transfer',$3)",[home,payment,randomUUID()]);assert.deepEqual(await balance(home),bal);
+ const refund1=await scalar("select public.refund_expense($1,$2,1,'One cent refund',$3)",[home,expense,randomUUID()]);
+ const refund2=await scalar("select public.refund_expense($1,$2,1000,'Rest of refund',$3)",[home,expense,randomUUID()]);
+ assert.deepEqual(await balance(home),{[a]:0,[b]:0},'full refund exactly reverses shares across partial refunds');
+ await assert.rejects(()=>scalar("select public.refund_expense($1,$2,1,'Too much',$3)",[home,expense,randomUUID()]),/invalid_refund/);
+ await assert.rejects(()=>save({...input,p_request:randomUUID()},expense,1,'Correction'),/has_refunds/);
+ await scalar("select public.void_refund($1,$2,'Refund reversed',$3)",[home,refund1,randomUUID()]);await scalar("select public.void_refund($1,$2,'Refund reversed',$3)",[home,refund2,randomUUID()]);assert.deepEqual(await balance(home),bal);
+ await as(b);await assert.rejects(()=>save({...input,p_request:randomUUID()},expense,1,'Not mine'),/forbidden/);await as(a);
+ const correctedInput={...input,p_request:randomUUID(),p_amount:2500,p_people:[b]};
+ const corrected=await save(correctedInput,expense,1,'B paid for their own items');assert.equal(await save(correctedInput,expense,1,'B paid for their own items'),corrected);
+ const correctedState=await state(home);assert.equal(correctedState.expenses.find((e:any)=>e.id===expense).status,'voided');assert.equal(correctedState.expenses.find((e:any)=>e.id===corrected).replaces_id,expense);
+ assert.deepEqual(await balance(home),{[a]:2500,[b]:-2500});
+ await assert.rejects(()=>save({...input,p_request:randomUUID()},expense,1,'Stale edit'),/stale_version/);
+ await scalar("select public.void_expense($1,$2,1,'Duplicate purchase',$3)",[home,corrected,randomUUID()]);assert.deepEqual(await balance(home),{[a]:0,[b]:0});
+ const unnamedUnit=await scalar("select public.add_shopping_item($1,'Bread',1,'','',false,$2)",[home,randomUUID()]);
+ assert.equal((await state(home)).shopping.find((i:any)=>i.id===unnamedUnit).unit,'items','optional unit has a safe default');
+ const itemRequest=randomUUID();const item=await scalar("select public.add_shopping_item($1,'Milk',2,'bottles','Full cream',false,$2)",[home,itemRequest]);
+ assert.equal(await scalar("select public.add_shopping_item($1,'Milk',2,'bottles','Full cream',false,$2)",[home,itemRequest]),item);
+ await assert.rejects(()=>scalar("select public.add_shopping_item($1,' milk ',1,'bottles','',false,$2)",[home,randomUUID()]),/already_needed/);
+ await scalar("select public.shopping_action($1,$2,'claim',null,1,$3)",[home,item,randomUUID()]);
+ await as(b);await assert.rejects(()=>scalar("select public.shopping_action($1,$2,'claim',null,1,$3)",[home,item,randomUUID()]),/stale_version/);
+ await assert.rejects(()=>scalar("select public.shopping_action($1,$2,'buy',1,2,$3)",[home,item,randomUUID()]),/item_claimed/);await as(a);
+ const buyRequest=randomUUID();const purchase=await scalar("select public.shopping_action($1,$2,'buy',1,2,$3)",[home,item,buyRequest]);assert.equal(await scalar("select public.shopping_action($1,$2,'buy',1,2,$3)",[home,item,buyRequest]),purchase);
+ assert.equal(Number((await state(home)).shopping.find((i:any)=>i.id===item).remaining),1);
+ const shoppingExpense=await save({...input,p_request:randomUUID(),p_description:'Milk',p_amount:500,p_people:[a]},null,null,'',purchase);
+ await assert.rejects(()=>save({...input,p_request:randomUUID()},null,null,'',purchase),/purchase_linked/);
+ await assert.rejects(()=>scalar('select public.undo_purchase($1,$2,$3)',[home,purchase,randomUUID()]),/purchase_linked/);
+ await scalar("select public.void_expense($1,$2,1,'Bought wrong milk',$3)",[home,shoppingExpense,randomUUID()]);
+ await scalar('select public.undo_purchase($1,$2,$3)',[home,purchase,randomUUID()]);assert.equal(Number((await state(home)).shopping.find((i:any)=>i.id===item).remaining),2);
+ const trip=await scalar("select public.create_space('Weekend','trip',$1,$2::uuid[],$3)",[home,[a,b],randomUUID()]);
+ await as(b);assert.equal((await state(trip)).members.length,2);await as(c);await assert.rejects(()=>state(trip),/forbidden/);await as(a);
+ await assert.rejects(()=>scalar("select public.create_space('Outsider','trip',$1,$2::uuid[],$3)",[home,[c],randomUUID()]),/trip_member_must_belong/);
+ // Legacy 0.2 requests retain their exact receipt after access changes.
+ await as(b);const legacyRequest=randomUUID();
+ const legacyCall=()=>scalar("select public.create_expense($1,$2,'Legacy',1,$3,$4::uuid[],'equal',null,'2026-10-05','other','')",[home,legacyRequest,b,[b]]);
+ const legacyExpense=await legacyCall();await as(a);
+ // Receipt replay remains available only to its actor even after an archive.
+ const activeInput={...input,p_request:randomUUID()};const activeExpense=await save(activeInput);
+ await scalar("select public.group_action($1,'archive',null,'',$2)",[home,randomUUID()]);assert.equal(await save(activeInput),activeExpense);
+ await assert.rejects(()=>save({...input,p_request:randomUUID()}),/forbidden/);
+ await scalar("select public.group_action($1,'reopen',null,'',$2)",[home,randomUUID()]);
+ await scalar("select public.group_action($1,'remove_member',$2,'',$3)",[home,b,randomUUID()]);
+ await as(b);await assert.rejects(()=>state(home),/forbidden/);await assert.rejects(()=>state(trip),/forbidden/);
+ assert.equal(await legacyCall(),legacyExpense,'a revoked actor may reconcile only their own committed request');
+ // Even an orphaned active trip membership cannot bypass parent revocation.
+ await db.exec('reset role');await db.query("update public.group_members set status='active' where group_id=$1 and user_id=$2",[trip,b]);
+ await as(b);await assert.rejects(()=>state(trip),/forbidden/);
+ assert.equal((await db.query('select id from public.groups where id=$1',[trip])).rows.length,0);
+ await assert.rejects(()=>save({...input,p_group:trip,p_request:randomUUID(),p_payer:b,p_people:[b]}),/forbidden/);
+ await as(a);await assert.rejects(()=>scalar("select public.group_action($1,'remove_member',$2,'',$3)",[home,a,randomUUID()]),/last_organiser/);
+ assert.ok((await state(home)).shares.some((s:any)=>s.user_id===b),'member removal preserves historical shares');
+ for(const table of ['payments','shopping_items','shopping_purchases','expense_refunds','refund_shares'])await assert.rejects(()=>db.query(`delete from public.${table}`),/permission denied/);
+ await db.exec('reset role;set role anon');await assert.rejects(()=>state(home),/permission denied/);
+});
