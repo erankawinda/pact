@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Pact</title>
+  <rect width="512" height="512" fill="#315c49"/>
+  <g fill="#fffef9" transform="translate(0 -20)">
+    <path fill-rule="evenodd" d="M146 166h47v20c17-18 38-27 63-27 51 0 86 40 86 96s-35 96-86 96c-25 0-46-9-61-26v68h-49V166zm95 42c-29 0-48 20-48 47s19 47 48 47 49-20 49-47-20-47-49-47z"/>
+    <circle cx="368" cy="329" r="24"/>
+  </g>
+</svg>

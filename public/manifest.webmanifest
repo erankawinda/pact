@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Pact",
+  "short_name": "Pact",
+  "description": "Shared expenses for your household and trips.",
+  "lang": "en-AU",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9f5",
+  "theme_color": "#284f36",
+  "icons": [
+    {
+      "src": "/icons/pact-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pact-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
