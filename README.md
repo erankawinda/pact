@@ -8,6 +8,8 @@ The idea is simple: one place to record what happened, choose who shares the cos
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with light and dark themes and a home-screen web app icon.
 
+This branch prepares the [profile and appearance preview](docs/RELEASE-0.4-PREVIEW.md). It is not a deployed release, and the separate 0.3.1 auto-fill update still needs to be reviewed and integrated.
+
 ## What it does
 
 - **Shared expenses:** choose the payer and participants, split equally or by exact amounts, and review before saving.

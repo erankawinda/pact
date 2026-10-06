@@ -2,6 +2,14 @@
 
 Pact 0.3 is an early household pilot. The 0.3 frontend was deployed and Google sign-in was verified on **5 October 2026**. Real two-phone acceptance testing remains outstanding. This is a dated release milestone, not a live service-status report.
 
+## Profile preview branch
+
+Version **0.4.0-preview.1** adds own-name editing and System/Light/Dark appearance on the `feat/basic-profiles` branch. It has not been deployed. It is based on the 0.3 code and does not yet include the separately prepared 0.3.1 auto-fill source; that source needs review and integration before a combined release.
+
+Local verification on **6 October 2026** passed: all **16** Node/database tests, TypeScript and Vite build, and all **14** browser scenarios. The four added scenarios cover profile persistence, visibility after another member refreshes, unchanged roles/ledger amounts, validation and failed-save recovery, accounts without a household, and appearance with mobile layout/axe checks. Tests use synthetic data and the actual migrations in disposable PGlite databases.
+
+The profile migration has not been applied to a hosted database. Local catalog checks verify function grants and search paths; hosted database advisors and real-phone acceptance remain deployment checks. See [preview release notes](RELEASE-0.4-PREVIEW.md).
+
 ## Implemented
 
 - Home, Shopping, Expenses and Balances navigation.

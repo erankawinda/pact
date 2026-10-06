@@ -16,8 +16,13 @@ Pact is a personal project built around the practical friction of living with ot
 
 ## Planned product work
 
+The [profile and appearance preview](RELEASE-0.4-PREVIEW.md) is prepared on a separate branch. The custom-share auto-fill update needs its own source review and regression checks before the two are combined.
+
+The next product priorities are:
+
+- Saved expense and split templates for repeated bills, with review before each new expense is posted.
+- A monthly household summary using the complete ledger, including corrections, refunds and confirmed repayments.
 - Private receipt attachments with explicit access controls.
-- Monthly expense summaries and reports.
 - Dispute flags and their resolution workflow.
 - Pantry stock states separate from the shopping request list.
 - A designed import/restore flow; the current JSON export has no matching importer.

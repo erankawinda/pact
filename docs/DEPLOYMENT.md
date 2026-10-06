@@ -24,6 +24,7 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 1. [`20261004024901_foundation.sql`](../supabase/migrations/20261004024901_foundation.sql)
 2. [`20261004025331_relationship_indexes.sql`](../supabase/migrations/20261004025331_relationship_indexes.sql)
 3. [`20261005071001_household_workflows.sql`](../supabase/migrations/20261005071001_household_workflows.sql)
+4. [`20261006062916_editable_profiles.sql`](../supabase/migrations/20261006062916_editable_profiles.sql) — profile-preview branch only; adds the own-name update operation.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 
@@ -86,3 +87,5 @@ Keep simulated transactions in a separate test household. These checks remain a 
 6. Check Back, reload, interrupted saves, phone keyboards, enlarged text and screen-reader navigation. Repeat sign-in and basic entry after adding Pact to the Home Screen.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
+
+For the profile preview, apply only the new profile migration to a development environment already running the first three migrations. Confirm that an existing client still reads records, that a user can edit only their own name, and that other members see the name after refreshing. Profile changes must leave roles and ledger amounts unchanged. Verify System/Light/Dark appearance and name edits on both phones before a release. See the [preview release notes](RELEASE-0.4-PREVIEW.md) for the separate auto-fill integration gate.
