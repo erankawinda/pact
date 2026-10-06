@@ -1,8 +1,8 @@
-# Auto-fill, profile and appearance preview
+# Auto-fill, profiles and appearance — 0.4.0-preview.2
 
-Version: **0.4.0-preview.2**. This is a development preview, not a deployed release.
+Deployed **6 October 2026** as **0.4.0-preview.2**. The reviewed preview version identifier is retained for this household pilot.
 
-This branch combines the reviewed 0.3.1 custom-share auto-fill source with basic profiles and device appearance preferences. The source integration preserves the repository's isolated browser fixture, dependency pins, privacy safeguards and previous timing fixes.
+This update combines the reviewed 0.3.1 custom-share auto-fill source with basic profiles and device appearance preferences. The source integration preserves the repository's isolated browser fixture, dependency pins, privacy safeguards and previous timing fixes.
 
 ## Included
 
@@ -18,7 +18,7 @@ This branch combines the reviewed 0.3.1 custom-share auto-fill source with basic
 
 Display names are shared with authorised fellow members and are used throughout current records, history and exports. Changing a name does not change the immutable user ID, membership, roles, expenses or balances. The Google email remains read-only and is shown in the owner's account screen; it is not added to the shared profile table. Organisers can already see intended addresses for pending invitations.
 
-Profile photos, contact information, banking details and online-presence tracking are outside this preview.
+Profile photos, contact information, banking details and online-presence tracking are outside this release.
 
 ## Verification
 
@@ -26,7 +26,13 @@ On 6 October 2026, `npm run check` passed all 21 Node/database tests, TypeScript
 
 The added browser checks cover single and multiple missing shares, explicit zero, deriving a missing total, invalid and excess shares, mode and participant changes, background refresh, draft reload, Review → Edit, membership removal and frozen custom-share save retries. Source review found no blocking defect in the auto-fill implementation. This is bounded verification, not a claim that every possible application defect is eliminated.
 
-These are local checks using synthetic accounts and a disposable PGlite database. They do not verify a hosted migration, Google sign-in, concurrent database connections or actual phone behaviour. Database function privileges and fixed search paths are asserted locally; hosted advisors remain a release check.
+The local suites use synthetic accounts and disposable PGlite databases. [GitHub Actions also passed on the deployed source commit](https://github.com/erankawinda/pact/actions/runs/37428554418) using Node.js 22.
+
+Separate hosted validation on 6 October passed all 11 database check groups in an isolated staging project. These covered own-profile updates, co-member visibility, nonmember isolation, trusted identity checks, input boundaries, unchanged roles and ledger records, existing operations, function privileges and fixed search paths. Synthetic database fixtures were rolled back. Staging security advisors reported no errors or warnings.
+
+Real Google sign-in then succeeded on staging. A display-name change persisted after reload, and the original name was restored and verified. Dark appearance persisted after reload, and the preference was restored to System. These browser checks used one real account; they do not establish independent-client concurrency or mobile accessibility.
+
+The maintainer chose to skip two-phone and independent two-account acceptance for this release. Those checks were not run and are not counted as passes. See [deployment checks](DEPLOYMENT.md#5-verify-shared-workflows) for an optional follow-up using separate browser sessions or actual phones.
 
 ## Database and compatibility
 
@@ -36,11 +42,12 @@ The change is additive: old clients can continue to use the existing schema afte
 
 The existing household refresh mechanism picks up changed names on other devices; profile changes are not a new Realtime broadcast feature.
 
-## Release preparation
+## Deployment record
 
-1. Run `npm run check` and `npm run test:browser` on the combined source after any further changes.
-2. Test the additive profile migration in a development backend and run its database advisors. Auto-fill needs no database migration.
-3. Rehearse the two-account checks in [DEPLOYMENT.md](DEPLOYMENT.md#5-check-with-two-accounts-on-real-phones), including real phone keyboards, custom amounts and profile edits.
-4. Build privately with the intended public connection values, retain the previous frontend deployment, and publish only the reviewed release after the profile migration has been applied.
+The deployed source is commit [`7fcd4f2`](https://github.com/erankawinda/pact/commit/7fcd4f27ad922c37e5ed857cc369111c9462e6d7). The profile migration was applied before the frontend; its installed function definitions match the validated staging definitions. Before/after fingerprints confirmed that the migration left all application-table contents unchanged. Auto-fill required no database migration.
 
-Do not deploy the unconfigured build produced by a public-repository check. No production credentials or household records belong in this repository.
+The live HTML, JavaScript, CSS and web manifest matched the privately configured release bundle byte for byte. Response headers, the existing signed-in session, household loading and the new account settings were checked. No production test expenses were created. The previous frontend deployment remains available for rollback.
+
+Configured bundles, environment identifiers, private verification logs and household records remain outside this repository. Public source checks produce an unconfigured build; publishing a fork requires that fork's own backend settings.
+
+For future releases, repeat checks appropriate to the changes and record incomplete acceptance work explicitly. Deployment and source-control history are separate for a Direct Upload project; merging a pull request does not publish the site.

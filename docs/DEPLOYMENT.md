@@ -24,7 +24,7 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 1. [`20261004024901_foundation.sql`](../supabase/migrations/20261004024901_foundation.sql)
 2. [`20261004025331_relationship_indexes.sql`](../supabase/migrations/20261004025331_relationship_indexes.sql)
 3. [`20261005071001_household_workflows.sql`](../supabase/migrations/20261005071001_household_workflows.sql)
-4. [`20261006062916_editable_profiles.sql`](../supabase/migrations/20261006062916_editable_profiles.sql) — profile-preview branch only; adds the own-name update operation.
+4. [`20261006062916_editable_profiles.sql`](../supabase/migrations/20261006062916_editable_profiles.sql) — adds the own-name update operation.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 
@@ -75,17 +75,21 @@ A Direct Upload project cannot be converted to native Git integration in place; 
 
 Allow the actual deployed origin in Google and Supabase as described in [GOOGLE-SETUP.md](GOOGLE-SETUP.md). Rebuild when public environment values change; changing dashboard variables cannot modify an already-uploaded bundle. If you use a custom Supabase domain, review `public/_headers` so the content security policy permits its HTTPS and WebSocket endpoints.
 
-## 5. Check with two accounts on real phones
+<a id="5-check-with-two-accounts-on-real-phones"></a>
 
-Keep simulated transactions in a separate test household. These checks remain a release acceptance task, beyond the local automated suite:
+## 5. Verify shared workflows
+
+Keep simulated transactions in a separate development environment. A short check with two independent Google accounts is recommended before a release. Different browsers or separate browser profiles can check shared records; ordinary tabs in the same profile may share one login. Physical phones add keyboard, layout and Home Screen coverage, but are not required for the shared-account checks.
 
 1. Open a personal invitation with the intended Google account. Check account switching preserves the invitation and acceptance adds the member.
-2. Add a $10.01 expense with exact shares of $5.01 and $5.00. Both devices must show the same expense and balances that sum to zero.
-3. Add a shopping item, claim it and mark part bought. Verify the other device updates, including after reconnecting.
+2. Add a $10.01 expense with exact shares of $5.01 and $5.00. Both sessions must show the same expense and balances that sum to zero.
+3. Add a shopping item, claim it and mark part bought. The remaining quantity should be available for anyone to pick up because partial purchases clear the claim. Verify the other session updates, including after reconnecting.
 4. Record a simulated repayment. Balances must stay unchanged until its recipient confirms it. No real transfer is needed for this test.
-5. Create a trip for selected members and confirm a nonparticipant cannot access it.
-6. Check Back, reload, interrupted saves, phone keyboards, enlarged text and screen-reader navigation. Repeat sign-in and basic entry after adding Pact to the Home Screen.
+5. Check Back, reload and recovery after a save request is interrupted. Going offline before saving instead disables Save; reconnect before submitting.
+6. For additional trip-privacy coverage, use a third account excluded from a trip and confirm it cannot access that trip.
+
+Optional physical-device checks cover decimal keyboards, enlarged text, screen-reader navigation and Home Screen installation. Record which checks actually ran. A skipped check remains unverified, even when a release proceeds.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
 
-For the combined preview, apply only the new profile migration to a development environment already running the first three migrations. Confirm that an existing client still reads records, that a user can edit only their own name, and that other members see the name after refreshing. Profile changes must leave roles and ledger amounts unchanged. Verify System/Light/Dark appearance and name edits on both phones, then exercise custom-share auto-fill with one missing share, several missing shares and an interrupted save. See the [preview release notes](RELEASE-0.4-PREVIEW.md).
+When upgrading from 0.3, validate only the new profile migration in a development environment already running the first three migrations. Confirm that an existing client still reads records, that a user can edit only their own name, and that other members see the name after refreshing. Profile changes must leave roles and ledger amounts unchanged. Verify System/Light/Dark appearance and name edits, then exercise custom-share auto-fill with one missing share, several missing shares and an interrupted save. Apply the validated migration to the target backend before publishing the combined frontend. See the [release notes](RELEASE-0.4-PREVIEW.md) for completed verification and remaining limits.

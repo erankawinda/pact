@@ -1,37 +1,39 @@
 # Project status
 
-Pact 0.3 is an early household pilot. The 0.3 frontend was deployed and Google sign-in was verified on **5 October 2026**. Real two-phone acceptance testing remains outstanding. This is a dated release milestone, not a live service-status report.
-
-## Combined preview branch
-
-Version **0.4.0-preview.2** combines the reviewed 0.3.1 custom-share auto-fill implementation with own-name editing and System/Light/Dark appearance on the `feat/basic-profiles` branch. It has not been deployed.
-
-Local verification on **6 October 2026** passed: all **21** Node/database tests, TypeScript and Vite build, and all **16** browser scenarios. Added coverage includes custom-share remainder calculation and edit/draft/retry transitions, profile persistence, visibility after another member refreshes, unchanged roles/ledger amounts, validation and failed-save recovery, accounts without a household, and appearance with mobile layout/axe checks. Tests use synthetic data and the actual migrations in disposable PGlite databases.
-
-The profile migration has not been applied to a hosted database. Local catalog checks verify function grants and search paths; hosted database advisors and real-phone acceptance remain deployment checks. See [preview release notes](RELEASE-0.4-PREVIEW.md).
+Pact **0.4.0-preview.2** was deployed on **6 October 2026**. It is a household pilot combining custom-share auto-fill, editable display names and System/Light/Dark appearance with the existing shared-house workflows. This is a dated release milestone, not a live service-status report.
 
 ## Implemented
 
 - Home, Shopping, Expenses and Balances navigation.
 - Google sign-in, personal invitations, household membership and selected trip participants.
-- Equal/exact expense splits, corrections, voids and refunds.
+- Equal/custom expense splits, automatic remaining shares, corrections, voids and refunds.
+- Own-display-name editing, initials avatars and browser-specific appearance preferences.
 - Shopping requests, claims, partial purchases and purchase-linked expenses.
 - Repayment recording, recipient confirmation and reversal.
 - Draft/save recovery, activity history and CSV/JSON exports.
 
-## Verification and its limits
+## Completed verification
 
-Fresh checks on the prepared repository passed on **5 October 2026**:
+Checks on the released source passed on **6 October 2026**:
 
-- `npm run check`: all 12 tests, TypeScript validation and the production build passed.
-- `npm run test:browser`: all ten Chromium scenarios passed, including the required axe accessibility checks. The suite checks the four main screens in both themes and layouts at 320/390/768/1280px.
+| Check | Evidence |
+|---|---|
+| Local Node/database tests | All 21 passed using synthetic data and the actual migrations in disposable PGlite databases |
+| TypeScript and Vite build | Passed; the existing bundle-size warning remains |
+| Isolated browser suite | All 16 scenarios passed, including profile, auto-fill, accessibility and responsive-layout checks |
+| GitHub Actions | [Passed on the deployed source commit with Node.js 22](https://github.com/erankawinda/pact/actions/runs/37428554418) |
+| Hosted staging database | All 11 validation groups passed; synthetic fixtures rolled back; security advisors reported no errors or warnings |
+| Staging Google sign-in and account settings | Real sign-in, profile save/reload/restore and appearance persistence verified |
+| Production deployment | Profile migration applied before the frontend; stored application data unchanged; served assets matched the release bundle; existing session, household and account settings loaded |
 
-These local runs used Node.js **25.6.1**. The GitHub Actions workflow is configured for **Node.js 22**; that configuration is separate from a completed hosted CI run. See [qa/README.md](../qa/README.md) to reproduce the browser checks. Generated artifacts are ignored by Git.
+Local runs used Node.js 25.6.1. CI used Node.js 22. See [qa/README.md](../qa/README.md) for reproducing the isolated browser suite and [release notes](RELEASE-0.4-PREVIEW.md) for hosted-validation scope. Generated artifacts and private deployment evidence are excluded from Git.
 
-PGlite fixtures exercise the migrations with synthetic identities and data. The browser harness disables environment-file loading, injects fictional connection values and intercepts external traffic. It does not establish Google OAuth behaviour, hosted Realtime delivery, separate-connection concurrency or real-phone accessibility. The dated Google sign-in check covers one live sign-in flow, not all multi-user acceptance cases.
+## Verification limits and next work
 
-## Outstanding
+Two-phone and independent two-account acceptance were **skipped for this release at the maintainer's request**, not passed. A future [shared-workflow check](DEPLOYMENT.md#5-verify-shared-workflows) can use two independent browser sessions. Actual phones add native keyboard, Home Screen and accessibility coverage.
 
-Complete the [two-account phone checks](DEPLOYMENT.md#5-check-with-two-accounts-on-real-phones), concurrency testing and a restore rehearsal. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
+PGlite serialises fixture queries, and the browser harness intercepts external traffic. These tests do not certify races across separate PostgreSQL connections, real multi-client Realtime delivery, native installation or screen-reader use. The hosted database and one-account Google checks extend that evidence without closing all of those gaps.
 
-The app records repayments; it does not transfer money. It has no offline transaction queue. JSON export is a group snapshot, not a complete database/Auth/Storage backup. See [ROADMAP.md](ROADMAP.md) for the next work and [RELEASE-0.3.md](RELEASE-0.3.md) for the release details.
+Concurrency testing, broader device checks and a backup/restore rehearsal remain outstanding. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
+
+The app records repayments; it does not transfer money. It has no offline transaction queue. JSON export is a group snapshot, not a complete database/Auth/Storage backup. See [ROADMAP.md](ROADMAP.md) for the next work and [RELEASE-0.3.md](RELEASE-0.3.md) for the earlier milestone.
