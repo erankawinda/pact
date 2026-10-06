@@ -8,13 +8,16 @@ The idea is simple: one place to record what happened, choose who shares the cos
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with light and dark themes and a home-screen web app icon.
 
+The [auto-fill, profile and appearance update](docs/RELEASE-0.4-PREVIEW.md) was deployed on **6 October 2026** as **0.4.0-preview.2**. It combines the custom-share improvements from 0.3.1 with basic profiles and device appearance preferences.
+
 ## What it does
 
-- **Shared expenses:** choose the payer and participants, split equally or by exact amounts, and review before saving.
+- **Shared expenses:** choose the payer and participants, split equally or enter the amounts you know and calculate the remainder, then review before saving.
 - **Balances and repayments:** see who owes what; repayments affect balances when the recipient confirms them.
 - **Shopping:** add quantities, claim an item, record partial purchases, and turn a purchase into an expense.
 - **Trips:** include only the people going and keep trip costs separate from the household.
 - **Household access:** Google sign-in, personal invitations, member management and an activity history.
+- **Your account:** edit your display name and choose System, Light or Dark appearance on each browser.
 - **Corrections and exports:** retain the original expense when correcting it, record refunds, and export the group ledger.
 
 Pact records repayments; it does not transfer money.
@@ -100,7 +103,7 @@ Amounts are stored as integer cents. Household access is enforced in the databas
 
 ## Current stage
 
-**Version 0.3 — a working personal project under household testing.** The core workflows are implemented. Real two-phone sync, concurrent database sessions and device accessibility still need broader validation. The app currently uses AUD and Melbourne time.
+**Version 0.4.0-preview.2 — a deployed household pilot.** Automated suites, hosted profile-migration validation, Google sign-in and live deployment checks passed. Independent two-account acceptance was skipped for this release; concurrent database sessions and actual-device accessibility still need broader validation. The app currently uses AUD and Melbourne time.
 
 Receipt attachments, recurring bills, monthly reports and full backup restoration are not implemented. JSON export is a group snapshot, not a complete restorable backup. See the [status](docs/STATUS.md) and [roadmap](docs/ROADMAP.md).
 

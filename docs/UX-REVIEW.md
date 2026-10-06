@@ -1,6 +1,6 @@
 # Interface design notes
 
-These notes preserve the useful design decisions from the 0.2 review (4 October 2026). The original three-tab layout and same-tab save recovery were superseded by 0.3. Use [STATUS.md](STATUS.md) and [RELEASE-0.3.md](RELEASE-0.3.md) for current behaviour.
+These notes preserve the useful design decisions from the 0.2 review (4 October 2026). The original three-tab layout and same-tab save recovery were superseded by 0.3. Use [STATUS.md](STATUS.md) and the [current release notes](RELEASE-0.4-PREVIEW.md) for current behaviour.
 
 ## Problems behind the design
 

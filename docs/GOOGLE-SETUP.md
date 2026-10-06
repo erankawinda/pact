@@ -39,4 +39,4 @@ If one development project serves both local and hosted previews, keep the deplo
 3. Create a personal invitation for a second test account. Open it in another browser session, sign in with that matching account and accept it.
 4. Test selecting the wrong Google account, switching accounts and accepting the preserved invitation.
 
-Google sign-in establishes identity; accepting the invitation grants household membership. A successful login alone does not prove sharing, access restrictions or Realtime delivery work. See the two-phone checklist in [DEPLOYMENT.md](DEPLOYMENT.md).
+Google sign-in establishes identity; accepting the invitation grants household membership. A successful login alone does not prove sharing, access restrictions or Realtime delivery work. See the shared-workflow checklist in [DEPLOYMENT.md](DEPLOYMENT.md#5-verify-shared-workflows).

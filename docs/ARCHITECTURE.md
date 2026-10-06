@@ -18,6 +18,7 @@ flowchart LR
 |---|---|
 | `src/App.tsx`, `src/navigation.ts` | Session state, screens and browser history |
 | `src/api.ts`, `src/useHousehold.ts` | Supabase connection, snapshots, refresh and Realtime subscriptions |
+| `src/AccountProfile.tsx`, `src/profile.ts` | Own display name, account details and device appearance preference |
 | `src/ExpenseForm.tsx`, `src/money.ts` | Expense entry, whole-cent parsing and equal/exact splits |
 | `src/pendingExpense.ts`, `src/useMutation.ts` | Store a request before sending; retry the same operation after an uncertain response |
 | `src/Shopping.tsx`, `src/HouseholdViews.tsx` | Shared shopping, expense history, balances and repayments |
@@ -32,11 +33,15 @@ A group is either a household or a trip under a household. Membership records ca
 
 Google identities create profile records. Personal invitation tokens are stored as hashes and tied to an intended email address, with expiry and revocation. A signed-in user must accept a matching invitation before joining.
 
+An own-name update RPC derives its target from the verified session, never a supplied user ID. Profile names remain visible to authorised co-members; private account emails and appearance choices are not added to shared profile rows. Names can change in history displays, while ledger references keep their immutable user IDs. Appearance is stored on the device and can follow the operating system.
+
 Readable tables use row-level security. Clients cannot write financial and workflow tables directly; public RPC wrappers call private functions that check identity, membership, role and input before a transaction commits. The database, rather than hidden buttons, enforces permission decisions.
 
 ## Money and history
 
 Amounts use integer cents. Equal splits distribute leftover cents deterministically; exact splits must sum to the total. The current product uses AUD and Melbourne dates.
+
+Custom splits keep manual values separate from calculated shares. One unknown share receives the remainder; several unknown shares require the explicit equal-remainder choice. An entered zero is fixed, while a blank is unknown. Review freezes the resulting integer shares, so interrupted saves retry the same request rather than recalculating against a newer draft.
 
 Balances are derived from posted expenses and shares, refunds and confirmed repayments. Recording a pending repayment does not change balances. Corrections retain the voided original and create a replacement expense; refunds are bounded by the refundable amount. Activity records make changes inspectable.
 

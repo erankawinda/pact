@@ -21,6 +21,39 @@ export function exactShares(cents: number, ids: string[], inputs: Record<string,
   if (Object.values(shares).reduce((a, b) => a + b, 0) !== cents) throw new Error('Each share must add up to the total.');
   return shares;
 }
+
+/** Blank is unknown; an entered zero is an explicit share. Never mutate the inputs. */
+export function planCustomSplit(cents: number | null, ids: string[], inputs: Record<string, string>, splitRemaining = false) {
+  const shares: Record<string, number> = {};
+  const blankIds: string[] = [], invalidIds: string[] = [];
+  let enteredCents = 0, inputError = '';
+  for (const id of ids) {
+    const value = inputs[id] ?? '';
+    if (!value.trim()) { blankIds.push(id); continue; }
+    try { shares[id] = parseMoney(value, true); enteredCents += shares[id]; }
+    catch (e) { invalidIds.push(id); inputError ||= (e as Error).message; }
+  }
+  const validPeople = ids.length > 0 && new Set(ids).size === ids.length;
+  const total = cents !== null && Number.isSafeInteger(cents) && cents >= 1 && cents <= MAX_CENTS ? cents : null;
+  const remainingCents = total === null || invalidIds.length ? null : total - enteredCents;
+  const canSplitRemaining = validPeople && !invalidIds.length && remainingCents !== null && remainingCents >= 0 && blankIds.length > 1;
+  const autoIds = validPeople && !invalidIds.length && remainingCents !== null && remainingCents >= 0 &&
+    (blankIds.length === 1 || splitRemaining) ? [...blankIds].sort() : [];
+  if (autoIds.length) {
+    // splitEqual intentionally rejects a zero expense; a zero remainder is valid.
+    Object.assign(shares, remainingCents === 0 ? Object.fromEntries(autoIds.map(id => [id, 0])) : splitEqual(remainingCents!, autoIds));
+  }
+  const suggestedTotal = validPeople && !invalidIds.length && !blankIds.length && enteredCents > 0 && enteredCents <= MAX_CENTS ? enteredCents : null;
+  let issue: string | null = null;
+  if (!validPeople) issue = 'Choose at least one person to share this expense.';
+  else if (invalidIds.length) issue = `Check the custom amounts. ${inputError}`;
+  else if (enteredCents > MAX_CENTS) issue = 'The entered shares exceed the maximum total of $1,000,000.';
+  else if (total === null) issue = "Enter the total above, or enter everyone's share.";
+  else if (remainingCents! < 0) issue = `${money(-remainingCents!)} over the total. Reduce the entered shares or increase the total.`;
+  else if (blankIds.length && !autoIds.length) issue = `${money(remainingCents!)} left for ${blankIds.length} people. Enter their shares or split the remainder equally.`;
+  else if (!blankIds.length && remainingCents !== 0) issue = `${money(remainingCents!)} left to allocate.`;
+  return {shares, blankIds, invalidIds, autoIds, enteredCents, remainingCents, canSplitRemaining, suggestedTotal, issue};
+}
 export function displayDate(value: string): string {
   const date = new Date(value + 'T12:00:00Z');
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-AU', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(date);

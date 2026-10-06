@@ -21,11 +21,44 @@ async function fixture({empty=false,signedIn=true,width=390,scheme='light'}={}){
  let queue=Promise.resolve();function sql(actor,query,args=[]){const run=queue.then(async()=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);await db.exec('set role authenticated');return db.query(query,args);});queue=run.catch(()=>{});return run;}
  async function call(actor,name,args){assert.match(name,/^[a-z_]+$/);const keys=Object.keys(args);keys.forEach(k=>assert.match(k,/^p_[a-z_]+$/));const params=keys.map((k,i)=>`${k}=>$${i+1}`).join(',');const values=keys.map(k=>args[k]!==null&&typeof args[k]==='object'&&!Array.isArray(args[k])?JSON.stringify(args[k]):args[k]);const result=await sql(actor,`select public.${name}(${params}) as value`,values);return result.rows[0].value;}
  let home='',trip='';if(!empty){home=await call(ids[0],'create_space',{p_name:'Our home',p_kind:'household',p_parent:null,p_people:[],p_request:randomUUID()});for(let i=1;i<ids.length;i++){const token=await call(ids[0],'create_invitation',{p_group:home,p_email:`${names[i].toLowerCase()}@example.test`});await call(ids[i],'accept_invitation',{p_token:token});}trip=await call(ids[0],'create_space',{p_name:'Weekend away',p_kind:'trip',p_parent:home,p_people:[ids[1]],p_request:randomUUID()});for(const [description,amount,payer,people,category,date] of [['Weekly groceries',8640,ids[0],ids,'groceries','2026-10-03'],['Friday takeout',5400,ids[1],ids.slice(0,3),'takeaway','2026-10-02']])await call(ids[0],'save_expense',{p_input:{p_group:home,p_request:randomUUID(),p_description:description,p_amount:amount,p_payer:payer,p_people:people,p_mode:'equal',p_exact:null,p_date:date,p_category:category,p_note:''}});}
- const state={calls:[],errors:[],unexpected:[],abortOnce:'',authOnce:'',hangOnce:'',delayInvite:0};const contexts=[];
+ const state={calls:[],errors:[],unexpected:[],abortOnce:'',authOnce:'',rejectOnce:'',hangOnce:'',delayInvite:0};const contexts=[];
  async function createPage(actor=ids[0],options={}){const context=await browser.newContext({viewport:{width,height:844},deviceScaleFactor:1,colorScheme:scheme,reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write'],...options});contexts.push(context);const i=ids.indexOf(actor);const user={id:actor,aud:'authenticated',role:'authenticated',email:`${names[i].toLowerCase()}@example.test`,email_confirmed_at:'2026-10-01T00:00:00Z',app_metadata:{provider:'google',providers:['google']},user_metadata:{full_name:names[i]},created_at:'2026-10-01T00:00:00Z'};const session={access_token:[{alg:'HS256',typ:'JWT'},{sub:actor,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'fixture'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.'),refresh_token:'local-only',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user};
  if(signedIn)await context.addInitScript(({session})=>{if(!localStorage.getItem('sb-pact-fixture-auth-token'))localStorage.setItem('sb-pact-fixture-auth-token',JSON.stringify(session));},{session});
  await context.routeWebSocket(/^wss:/,ws=>ws.close());
- await context.route('**/*',async route=>{const request=route.request(),url=new URL(request.url());if(url.origin===host)return route.continue();if(url.hostname!=='pact-fixture.supabase.co'){state.unexpected.push(url.origin+url.pathname);return route.abort();}const respond=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'access-control-allow-origin':host}});if(request.method()==='OPTIONS')return respond({});if(url.pathname==='/auth/v1/user')return respond(user);if(url.pathname==='/auth/v1/logout')return respond({});if(url.pathname==='/auth/v1/authorize'){state.calls.push({name:'oauth',url:url.href});return route.fulfill({contentType:'text/html',body:'<title>Local sign-in handoff</title><p>Local sign-in handoff</p>'});}if(url.pathname==='/rest/v1/groups'){const result=await sql(actor,'select id,name,kind,archived_at,parent_household_id from public.groups order by created_at');return respond(result.rows);}const name=url.pathname.split('/').at(-1),args=request.postDataJSON();state.calls.push({name,args});if(state.hangOnce===name){state.hangOnce='';return;}if(state.authOnce===name){state.authOnce='';return respond({code:'PGRST301',message:'JWT expired'},401);}try{if(name==='create_invitation'&&state.delayInvite)await new Promise(r=>setTimeout(r,state.delayInvite));const value=await call(actor,name,args);if(state.abortOnce===name){state.abortOnce='';return route.abort('failed');}return respond(value);}catch(e){return respond({code:e.code??'P0001',message:e.message},400);}});
+ await context.route('**/*',async route=>{
+  const request=route.request(),url=new URL(request.url());
+  if(url.origin===host)return route.continue();
+  if(url.hostname!=='pact-fixture.supabase.co'){state.unexpected.push(url.origin+url.pathname);return route.abort();}
+  const respond=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'access-control-allow-origin':host}});
+  if(request.method()==='OPTIONS')return respond({});
+  if(url.pathname==='/auth/v1/user')return respond(user);
+  if(url.pathname==='/auth/v1/logout')return respond({});
+  if(url.pathname==='/auth/v1/authorize'){state.calls.push({name:'oauth',url:url.href});return route.fulfill({contentType:'text/html',body:'<title>Local sign-in handoff</title><p>Local sign-in handoff</p>'});}
+  if(url.pathname==='/rest/v1/groups'){const result=await sql(actor,'select id,name,kind,archived_at,parent_household_id from public.groups order by created_at');return respond(result.rows);}
+  if(url.pathname==='/rest/v1/profiles'&&request.method()==='GET'){
+   // Execute the actual table read as this actor; never substitute Auth metadata
+   // or bypass the migrations' row-level policy for a profile response.
+   const select=(url.searchParams.get('select')??'id,display_name').split(',');
+   assert.ok(select.length&&select.every(column=>['id','display_name'].includes(column)),'Unexpected profile projection');
+   const idFilter=url.searchParams.get('id');assert.ok(!idFilter||/^eq\.[0-9a-f-]{36}$/i.test(idFilter),'Unexpected profile filter');
+   state.calls.push({name:'get_profile',actor,select,id:idFilter?.slice(3)??null});
+   try{
+    const result=await sql(actor,`select ${select.join(',')} from public.profiles${idFilter?' where id=$1':''}`,idFilter?[idFilter.slice(3)]:[]);
+    // single() requests an object; maybeSingle() accepts the ordinary array and
+    // handles a zero-row response in supabase-js.
+    if((request.headers().accept??'').includes('application/vnd.pgrst.object+json')){
+     if(result.rows.length!==1)return respond({code:'PGRST116',message:'JSON object requested, multiple (or no) rows returned',details:`The result contains ${result.rows.length} rows`},406);
+     return respond(result.rows[0]);
+    }
+    return respond(result.rows);
+   }catch(e){return respond({code:e.code??'P0001',message:e.message},400);}
+  }
+  const name=url.pathname.split('/').at(-1),args=request.postDataJSON();state.calls.push({name,args});
+  if(state.hangOnce===name){state.hangOnce='';return;}
+  if(state.authOnce===name){state.authOnce='';return respond({code:'PGRST301',message:'JWT expired'},401);}
+  if(state.rejectOnce===name){state.rejectOnce='';return respond({code:'23514',message:'The profile could not be saved. Please try again.'},400);}
+  try{if(name==='create_invitation'&&state.delayInvite)await new Promise(r=>setTimeout(r,state.delayInvite));const value=await call(actor,name,args);if(state.abortOnce===name){state.abortOnce='';return route.abort('failed');}return respond(value);}catch(e){return respond({code:e.code??'P0001',message:e.message},400);}
+ });
  const page=await context.newPage();page.on('pageerror',e=>state.errors.push(String(e)));page.setDefaultTimeout(7000);await page.goto(host);await page.getByRole('button',{name:signedIn?(empty?'Create a household':'Add expense'):'Continue with Google',exact:true}).waitFor();return {page,context};}
  const first=await createPage();return {...first,state,db,call,home,trip,createPage,close:async()=>{for(const c of contexts)await c.close();await db.close();}};
 }
@@ -41,18 +74,204 @@ async function shot(page,label){
  }
 }
 async function test(name,run){const start=Date.now();try{await run();results.push({name,status:'passed',ms:Date.now()-start});console.log(`PASS ${name}`);}catch(e){console.error(`FAIL ${name}`,e);results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync('qa/artifacts/browser-results.json',JSON.stringify(results,null,2));}}
-async function addExpense(page,{amount='10.01',name='Shared snack',people=['Blake','Casey']}={}){await page.getByRole('button',{name:'Add expense',exact:true}).click();await page.getByLabel('Amount · AUD').fill(amount);await page.getByLabel('What was it for?').fill(name);for(const who of people)await page.getByRole('checkbox',{name:who,exact:true}).check();}
+async function addExpense(page,{amount='10.01',name='Shared snack',people=['Blake','Casey']}={}){await page.getByRole('button',{name:'Add expense',exact:true}).click();await page.getByLabel('Amount · AUD').fill(amount);await page.getByLabel('What was it for?').fill(name);for(const who of people)await page.getByRole('checkbox',{name:who==='Alex'?'Alex You':who,exact:true}).check();}
+async function openAccount(page){await page.getByRole('button',{name:'Account',exact:true}).click();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await page.getByLabel('Display name',{exact:true}).waitFor();await page.getByText('Loading your profile…',{exact:true}).waitFor({state:'hidden'});}
+async function expectProfileName(page,value){const input=await page.getByLabel('Display name',{exact:true}).elementHandle();await page.waitForFunction(({input,value})=>input.value===value,{input,value});}
+async function accessibility(page,label){await page.addScriptTag({content:readFileSync(axePath,'utf8')});const axe=await page.evaluate(async()=>await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.map(n=>n.target)})),[],label);}
+async function palette(page){return page.evaluate(()=>{const root=document.documentElement,style=getComputedStyle(root);return {ink:style.getPropertyValue('--ink').trim(),surface:style.getPropertyValue('--surface').trim(),scheme:style.colorScheme};});}
 async function done(f){assert.deepEqual(f.state.errors,[]);assert.deepEqual(f.state.unexpected,[]);await f.close();}
 try{
  await test('Navigation, Takeout search, details, phone widths and contrast in both themes',async()=>{const f=await fixture();const {page}=f;await shot(page,'home-mobile');await nav(page,'Expenses').click();await page.getByRole('searchbox',{name:'Search expenses'}).fill('Takeout');assert.equal(await page.locator('.expense-row').count(),1);await page.locator('.expense-row summary').click();await page.getByText('Original split',{exact:true}).waitFor();await page.getByRole('searchbox').fill('');await shot(page,'expenses-mobile');for(const tab of ['Home','Shopping','Expenses','Balances']){await nav(page,tab).click();await page.getByRole('heading',{level:1}).waitFor();for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:844});await layout(page,`${tab}-${width}`);}await page.setViewportSize({width:390,height:844});for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});if(axePath){await page.addScriptTag({content:readFileSync(axePath,'utf8')});const axe=await page.evaluate(async()=>await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.map(n=>n.target)})),[],`${tab} ${scheme}`);}}}await shot(page,'balances-dark');await done(f);});
- await test('Exact shares, payer excluded, draft survives browser Back and reload',async()=>{const f=await fixture();const {page}=f;await addExpense(page);assert.match(await page.locator('.split-list').innerText(),/\$5.01/);await page.getByRole('button',{name:'Custom amounts',exact:true}).click();await page.getByLabel("Blake's share",{exact:true}).fill('10.01');assert.match(await page.locator('.split-status').innerText(),/Enter an amount for every/);await page.getByLabel("Casey's share",{exact:true}).fill('0');assert.match(await page.locator('.split-status').innerText(),/Total matches/);await page.goBack();await page.getByRole('button',{name:'Add expense',exact:true}).click();assert.equal(await page.getByLabel('What was it for?').inputValue(),'Shared snack');await page.reload();await page.getByLabel('What was it for?').waitFor();assert.equal(await page.getByLabel('Amount · AUD').inputValue(),'10.01');await shot(page,'expense-form');await page.getByRole('button',{name:'Review expense'}).click();await shot(page,'expense-review');await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();const calls=f.state.calls.filter(c=>c.name==='save_expense');assert.equal(calls.length,1);assert.deepEqual(calls[0].args.p_input.p_people,ids.slice(1,3));const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});const e=s.expenses.find(e=>e.description==='Shared snack');assert.equal(e.amount_cents,1001);assert.deepEqual(s.shares.filter(v=>v.expense_id===e.id).map(v=>Number(v.share_cents)).sort((a,b)=>a-b),[0,1001]);await done(f);});
- await test('Unconfirmed committed expense survives closing a tab; retry has one ledger entry',async()=>{const f=await fixture();let page=f.page;f.state.abortOnce='save_expense';await addExpense(page,{name:'Lost response'});await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByRole('button',{name:'Check this save',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Back',exact:true}).isDisabled(),false);await page.close();page=await f.context.newPage();await page.goto(host);await page.getByRole('button',{name:'Check save',exact:true}).click();await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();const calls=f.state.calls.filter(c=>c.name==='save_expense');assert.equal(calls.length,2);assert.deepEqual(calls[0].args,calls[1].args);const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.expenses.filter(e=>e.description==='Lost response').length,1);await done(f);});
+ await test('Exact shares, payer excluded, draft survives browser Back and reload',async()=>{const f=await fixture();const {page}=f;await addExpense(page);assert.match(await page.locator('.split-list').innerText(),/\$5.01/);await page.getByRole('button',{name:'Custom amounts',exact:true}).click();await page.getByLabel("Blake's share",{exact:true}).fill('10.01');assert.match(await page.locator('.split-status').innerText(),/1 share calculated automatically/);assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'0.00');await page.getByLabel("Casey's share",{exact:true}).fill('0');assert.match(await page.locator('.split-status').innerText(),/Total matches/);await page.goBack();await page.getByRole('button',{name:'Add expense',exact:true}).click();assert.equal(await page.getByLabel('What was it for?').inputValue(),'Shared snack');await page.reload();await page.getByLabel('What was it for?').waitFor();assert.equal(await page.getByLabel('Amount · AUD').inputValue(),'10.01');await shot(page,'expense-form');await page.getByRole('button',{name:'Review expense'}).click();await shot(page,'expense-review');await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();const calls=f.state.calls.filter(c=>c.name==='save_expense');assert.equal(calls.length,1);assert.deepEqual(calls[0].args.p_input.p_people,ids.slice(1,3));const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});const e=s.expenses.find(e=>e.description==='Shared snack');assert.equal(e.amount_cents,1001);assert.deepEqual(s.shares.filter(v=>v.expense_id===e.id).map(v=>Number(v.share_cents)).sort((a,b)=>a-b),[0,1001]);await done(f);});
+ await test('Custom remainder recalculates, preserves manual zero, survives edits and saves exact cents',async()=>{
+  const f=await fixture();const {page}=f;
+  await addExpense(page,{amount:'100.01',name:'Custom remainder',people:names});
+  await page.getByRole('button',{name:'Custom amounts',exact:true}).click();
+  const share=name=>page.getByLabel(`${name}'s share`,{exact:true});
+  await share('Alex').fill('20');await share('Blake').fill('30');
+  assert.equal(await share('Casey').inputValue(),'');
+  assert.match(await page.locator('.split-status').innerText(),/2 people/);
+  await page.getByRole('button',{name:'Split remaining equally',exact:true}).click();
+  assert.equal(await share('Casey').inputValue(),'25.01');assert.equal(await share('Devin').inputValue(),'25.00');
+  await page.getByLabel('Amount · AUD').fill('40');
+  assert.match(await page.locator('.split-status').innerText(),/\$10.00 over/);
+  assert.equal(await share('Casey').inputValue(),'');assert.equal(await share('Devin').inputValue(),'');
+  await page.getByRole('button',{name:'Review expense',exact:true}).click();
+  assert.match(await page.getByRole('alert').innerText(),/\$10.00 over/);
+  assert.equal(f.state.calls.filter(c=>c.name==='save_expense').length,0);
+  await page.getByLabel('Amount · AUD').fill('100.01');
+  // Typing over a calculated value must start a manual value, not append to it.
+  await share('Casey').click();await share('Casey').pressSequentially('10');
+  assert.equal(await share('Casey').inputValue(),'10');assert.equal(await share('Devin').inputValue(),'40.01');
+  await share('Casey').fill('0');assert.equal(await share('Devin').inputValue(),'50.01');
+  assert.equal(await page.locator('.auto-share-label').count(),1);
+  await share('Casey').fill('');await page.getByRole('heading',{name:'Add an expense',exact:true}).click();
+  assert.equal(await share('Casey').inputValue(),'25.01');
+  await page.getByRole('checkbox',{name:'Blake',exact:true}).uncheck();
+  assert.equal(await share('Casey').inputValue(),'40.01');assert.equal(await share('Devin').inputValue(),'40.00');
+  await page.getByRole('checkbox',{name:'Blake',exact:true}).check();
+  assert.equal(await share('Blake').inputValue(),'30');assert.equal(await share('Casey').inputValue(),'25.01');
+  await page.reload();await share('Casey').waitFor();
+  assert.equal(await share('Casey').inputValue(),'25.01');assert.equal(await page.locator('.auto-share-label').count(),2);
+  // Mode changes and selection controls must keep entered amounts separate from
+  // calculated shares, including when all inputs temporarily disappear.
+  await page.getByRole('button',{name:'Equally',exact:true}).click();
+  assert.equal(await page.locator('.exact-input input').count(),0);
+  await page.getByRole('button',{name:'Custom amounts',exact:true}).click();
+  assert.equal(await share('Alex').inputValue(),'20');assert.equal(await share('Blake').inputValue(),'30');
+  assert.equal(await share('Casey').inputValue(),'25.01');assert.equal(await share('Devin').inputValue(),'25.00');
+  await page.getByRole('button',{name:'Clear',exact:true}).click();
+  assert.match(await page.locator('.split-status').innerText(),/No one selected/);
+  assert.equal(await page.locator('.exact-input input').count(),0);assert.equal(await page.locator('.auto-share-label').count(),0);
+  await page.getByRole('button',{name:'Select all',exact:true}).click();
+  assert.equal(await share('Alex').inputValue(),'20');assert.equal(await share('Blake').inputValue(),'30');
+  assert.equal(await share('Casey').inputValue(),'25.01');assert.equal(await share('Devin').inputValue(),'25.00');
+  const refreshed=page.waitForResponse(response=>response.url().endsWith('/rest/v1/rpc/get_household_state'));
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await refreshed;
+  assert.equal(await share('Alex').inputValue(),'20');assert.equal(await share('Casey').inputValue(),'25.01');
+  assert.equal(await page.locator('.auto-share-label').count(),2);
+  await page.getByRole('button',{name:'Review expense',exact:true}).click();
+  await page.getByRole('button',{name:'Edit',exact:true}).click();
+  assert.equal(await page.locator('.auto-share-label').count(),2);
+  await page.getByLabel('Amount · AUD').fill('120.01');
+  assert.equal(await share('Alex').inputValue(),'20.00');assert.equal(await share('Blake').inputValue(),'30.00');
+  assert.equal(await share('Casey').inputValue(),'35.01');assert.equal(await share('Devin').inputValue(),'35.00');
+  for(const width of [320,390,768]){await page.setViewportSize({width,height:844});await layout(page,`custom remainder ${width}`);}
+  await page.setViewportSize({width:390,height:844});
+  for(const scheme of ['light','dark']){
+   await page.emulateMedia({colorScheme:scheme});
+   await accessibility(page,`custom split ${scheme}`);
+   await shot(page,`custom-remainder-${scheme}`);
+  }
+  await page.getByRole('button',{name:'Review expense',exact:true}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();
+  await page.getByText('Expense saved.',{exact:true}).waitFor();
+  const state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  const expense=state.expenses.find(e=>e.description==='Custom remainder');assert.equal(expense.amount_cents,12001);
+  const shares=Object.fromEntries(state.shares.filter(v=>v.expense_id===expense.id).map(v=>[v.user_id,Number(v.share_cents)]));
+  assert.deepEqual(shares,{[ids[0]]:2000,[ids[1]]:3000,[ids[2]]:3501,[ids[3]]:3500});
+  await done(f);
+ });
+ await test('Known custom shares suggest a total and one blank automatically takes the remainder',async()=>{
+  const f=await fixture();const {page}=f;
+  await addExpense(page,{amount:'',name:'Known shares',people:names});await page.getByRole('button',{name:'Custom amounts',exact:true}).click();
+  for(const [name,value] of [['Alex','20'],['Blake','30'],['Casey','58']])await page.getByLabel(`${name}'s share`,{exact:true}).fill(value);
+  assert.equal(await page.getByRole('button',{name:/Use .* as total/}).count(),0);
+  await page.getByLabel("Devin's share",{exact:true}).fill('30');
+  await page.getByRole('button',{name:'Use $138.00 as total',exact:true}).click();
+  assert.equal(await page.getByLabel('Amount · AUD').inputValue(),'138.00');
+  assert.match(await page.locator('.split-status').innerText(),/Total matches/);
+  await page.getByLabel("Casey's share",{exact:true}).fill('');
+  await page.getByRole('heading',{name:'Add an expense',exact:true}).click();
+  assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'58.00');
+  assert.equal(await page.locator('.auto-share-label').count(),1);
+  await page.getByLabel('Amount · AUD').fill('150');
+  assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'70.00');
+  await page.getByLabel("Casey's share",{exact:true}).fill('1.001');
+  assert.equal(await page.getByLabel("Casey's share",{exact:true}).getAttribute('aria-invalid'),'true');
+  await page.getByRole('button',{name:'Review expense',exact:true}).click();
+  assert.match(await page.getByRole('alert').innerText(),/two decimal/);
+  await page.getByLabel("Casey's share",{exact:true}).fill('');
+  await page.getByRole('button',{name:'Review expense',exact:true}).click();
+  assert.equal(await page.locator('.review-amount').innerText(),'$150.00');
+  await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();
+  const call=f.state.calls.filter(c=>c.name==='save_expense').at(-1);
+  assert.deepEqual(call.args.p_input.p_exact,{[ids[0]]:2000,[ids[1]]:3000,[ids[2]]:7000,[ids[3]]:3000});
+  await done(f);
+ });
+ await test('Unconfirmed committed expense survives closing a tab; retry has one ledger entry',async()=>{const f=await fixture();let page=f.page;f.state.abortOnce='save_expense';await addExpense(page,{name:'Lost response'});await page.getByRole('button',{name:'Custom amounts',exact:true}).click();await page.getByLabel("Blake's share",{exact:true}).fill('4');assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'6.01');await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByRole('button',{name:'Check this save',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Back',exact:true}).isDisabled(),false);await page.close();page=await f.context.newPage();await page.goto(host);await page.getByRole('button',{name:'Check save',exact:true}).click();await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();const calls=f.state.calls.filter(c=>c.name==='save_expense');assert.equal(calls.length,2);assert.deepEqual(calls[0].args,calls[1].args);assert.deepEqual(calls[0].args.p_input.p_exact,{[ids[1]]:400,[ids[2]]:601});const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.expenses.filter(e=>e.description==='Lost response').length,1);await done(f);});
  await test('Save deadline leaves recoverable state and expired authentication offers sign-in',async()=>{const f=await fixture();const {page}=f;await addExpense(page,{name:'Timeout test'});await page.getByRole('button',{name:'Review expense'}).click();await page.clock.install();f.state.hangOnce='save_expense';await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.waitForFunction(()=>!!Object.keys(localStorage).find(k=>k.startsWith('pact:pending-expense:')));await page.clock.fastForward(31000);await page.getByRole('button',{name:'Check this save',exact:true}).waitFor();f.state.authOnce='save_expense';await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByRole('button',{name:'Sign in again',exact:true}).waitFor();assert.ok(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('pact:pending-expense:'))));await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();await done(f);});
  await test('Invitation opened in active app, account switching preserves link, busy email is frozen',async()=>{const f=await fixture();const {page}=f;const token='a'.repeat(64);await page.evaluate(t=>{location.hash='invite='+t;},token);await page.getByRole('heading',{name:'Join your people'}).waitFor();assert.equal(await page.getByLabel('Invitation link or code').inputValue(),token);await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.evaluate(()=>sessionStorage.getItem('our-place-invite')),token);await page.evaluate(t=>{location.hash='invite='+t;},token);await page.getByRole('button',{name:'Use a different Google account'}).click();await page.getByText('Local sign-in handoff',{exact:true}).waitFor();assert.match(f.state.calls.find(c=>c.name==='oauth').url,/prompt=select_account/);await page.goto(host);await page.getByRole('heading',{name:'Join your people'}).waitFor();assert.equal(await page.getByLabel('Invitation link or code').inputValue(),token);await page.evaluate(()=>sessionStorage.removeItem('our-place-invite'));await page.goto(host);await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Invite a flatmate',exact:true}).click();await page.getByLabel('Google email').fill('new.person@example.test');f.state.delayInvite=300;await page.getByRole('button',{name:'Create invitation link'}).click();assert.equal(await page.getByLabel('Google email').isDisabled(),true);await page.getByRole('heading',{name:'Share the invitation'}).waitFor();assert.match(await page.locator('main').innerText(),/new.person@example.test/);await done(f);});
  await test('Shopping add, claim, partial buy, cost link, duplicate protection and undo',async()=>{const f=await fixture();const {page}=f;await nav(page,'Shopping').click();await page.getByRole('button',{name:'Add item',exact:true}).click();await page.getByLabel('Item',{exact:true}).fill('Milk');await page.getByLabel('Quantity',{exact:true}).fill('2');await page.getByLabel('Unit (optional)').fill('bottles');await page.getByRole('button',{name:'Add to list',exact:true}).click();await page.getByRole('button',{name:'I’ll get it'}).click();await page.getByText('You’re getting this',{exact:true}).waitFor();await page.getByText('Bought part of it?',{exact:true}).click();await page.getByLabel('Quantity bought').fill('1');await page.getByRole('button',{name:'Save quantity',exact:true}).click();await page.getByRole('button',{name:'Bought · 1',exact:true}).click();await page.getByRole('button',{name:'Add its cost'}).click();assert.equal(await page.getByLabel('What was it for?').inputValue(),'Milk');await page.getByLabel('Amount · AUD').fill('3');await page.getByRole('button',{name:'Select all',exact:true}).click();await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();await nav(page,'Shopping').click();await shot(page,'shopping-needed');await page.getByRole('button',{name:'Bought · 1'}).click();assert.equal(await page.getByRole('button',{name:'Add its cost'}).count(),0);await page.getByRole('button',{name:'Undo',exact:true}).click();await page.getByRole('button',{name:'Undo purchase',exact:true}).click();await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/void.*linked expense/i);await shot(page,'shopping-purchased');const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.shopping[0].remaining),1);assert.equal(s.purchases.length,1);assert.ok(s.purchases[0].expense_id);await done(f);});
  await test('Repayment recorded by sender and confirmed by recipient; balances change only on confirmation',async()=>{const f=await fixture();const {page:sender}=await f.createPage(ids[2]);await nav(sender,'Balances').click();await sender.getByRole('button',{name:'Record a repayment',exact:true}).click();await sender.getByLabel('Paid to').selectOption(ids[0]);await sender.getByLabel('Amount · AUD').fill('39.60');await sender.getByRole('button',{name:'Record repayment',exact:true}).click();await sender.getByRole('heading',{name:'Balances',exact:true}).waitFor();let s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),-3960);const {page}=f;await nav(page,'Balances').click();await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByRole('heading',{name:'Waiting for confirmation'}).waitFor({state:'hidden'});s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),0);assert.equal(s.payments[0].status,'confirmed');await shot(page,'repayment-confirmed');await done(f);});
  await test('Expense correction keeps old record, refunds adjust balances, CSV exports safely',async()=>{const f=await fixture();const {page}=f;await nav(page,'Expenses').click();const row=page.locator('.expense-row').filter({hasText:'Weekly groceries'});await row.locator('summary').click();await row.getByRole('button',{name:'Correct expense'}).click();await page.getByLabel('Amount · AUD').fill('80');await page.getByLabel('Reason for correction').fill('Correct receipt total');await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();let s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.expenses.filter(e=>e.description==='Weekly groceries').length,2);await page.locator('.expense-row').filter({hasText:'Weekly groceries'}).filter({hasText:'Voided · kept in history'}).waitFor({state:'visible'});const corrected=page.locator('.expense-row').filter({hasText:'Weekly groceries'}).filter({hasNotText:'Voided · kept in history'});await corrected.locator('summary').click();await corrected.getByRole('button',{name:'Record refund'}).click();await page.getByRole('dialog').getByLabel('Amount · AUD').fill('4');await page.getByRole('dialog').getByLabel('Reason').fill('Returned item');await page.getByRole('dialog').getByRole('button',{name:'Record refund'}).click();await page.getByRole('dialog').waitFor({state:'hidden'});s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.refunds[0].amount_cents,400);assert.equal(s.refund_shares.reduce((a,v)=>a+Number(v.share_cents),0),400);await page.getByRole('button',{name:'Household menu',exact:true}).click();await page.getByRole('button',{name:'Settings & exports'}).click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();const file=await downloading;const path=await file.path();const csv=readFileSync(path,'utf8');assert.match(csv,/Expense share/);assert.match(csv,/Refund share/);assert.match(csv,/Correct receipt total/);await done(f);});
- await test('Trip selection includes chosen household members and membership changes update an open expense form',async()=>{const f=await fixture();const {page}=f;await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByLabel('Trip name').fill('Coast weekend');await page.getByRole('checkbox',{name:'Casey',exact:true}).check();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByRole('heading',{name:'People & trips'}).waitFor();const call=f.state.calls.filter(c=>c.name==='create_space').at(-1);assert.deepEqual(call.args.p_people,[ids[2]]);await page.getByRole('button',{name:'Household menu',exact:true}).click();await page.getByRole('button',{name:'Our home',exact:true}).click();await addExpense(page,{name:'Membership changes',people:['Casey']});await f.call(ids[0],'group_action',{p_group:f.home,p_action:'remove_member',p_target:ids[2],p_value:'',p_request:randomUUID()});await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByText('The people in this household changed.',{exact:false}).waitFor();assert.equal(await page.getByRole('checkbox',{name:'Casey',exact:true}).count(),0);assert.match(await page.locator('.split-status').innerText(),/No one selected/);await done(f);});
+ await test('Trip selection includes chosen household members and membership changes update an open expense form',async()=>{const f=await fixture();const {page}=f;await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByLabel('Trip name').fill('Coast weekend');await page.getByRole('checkbox',{name:'Casey',exact:true}).check();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByRole('heading',{name:'People & trips'}).waitFor();const call=f.state.calls.filter(c=>c.name==='create_space').at(-1);assert.deepEqual(call.args.p_people,[ids[2]]);await page.getByRole('button',{name:'Household menu',exact:true}).click();await page.getByRole('button',{name:'Our home',exact:true}).click();await addExpense(page,{name:'Membership changes',people:['Casey']});await page.getByRole('button',{name:'Custom amounts',exact:true}).click();assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'10.01');await f.call(ids[0],'group_action',{p_group:f.home,p_action:'remove_member',p_target:ids[2],p_value:'',p_request:randomUUID()});await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByText('The people in this household changed.',{exact:false}).waitFor();assert.equal(await page.getByRole('checkbox',{name:'Casey',exact:true}).count(),0);assert.match(await page.locator('.split-status').innerText(),/No one selected/);assert.equal(await page.locator('.exact-input input').count(),0);assert.equal(await page.locator('.auto-share-label').count(),0);await done(f);});
  await test('Large balances remain unbroken at 320px; realtime fallback refreshes on focus',async()=>{const f=await fixture({width:320});await f.call(ids[0],'save_expense',{p_input:{p_group:f.home,p_request:randomUUID(),p_description:'Large test purchase',p_amount:100000000,p_payer:ids[0],p_people:[ids[1]],p_mode:'equal',p_exact:null,p_date:'2026-10-05',p_category:'other',p_note:''}});await f.page.evaluate(()=>window.dispatchEvent(new Event('focus')));await f.page.getByText('$1,000,046.80',{exact:true}).waitFor();await layout(f.page,'large balance320');const info=await f.page.locator('.balance-summary>strong').evaluate(el=>({height:el.getBoundingClientRect().height,lineHeight:parseFloat(getComputedStyle(el).lineHeight),whiteSpace:getComputedStyle(el).whiteSpace}));assert.equal(info.whiteSpace,'nowrap');assert.ok(info.height<=info.lineHeight+1);await shot(f.page,'large-balance-320');await done(f);});
+ await test('Profile names trim and survive reload; members see refreshed names without email or ledger changes',async()=>{
+  const f=await fixture(),{page}=f,other=await f.createPage(ids[1]);
+  await other.page.getByRole('button',{name:'People & trips',exact:true}).click();
+  await other.page.getByRole('heading',{name:'People & trips',exact:true}).waitFor();
+  await other.page.clock.install();await other.page.clock.pauseAt(new Date(Date.now()+1000));
+  assert.match(await other.page.locator('.member-card').first().innerText(),/Alex/);
+  const before=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  const authBefore=await page.evaluate(()=>localStorage.getItem('sb-pact-fixture-auth-token'));
+  await openAccount(page);await expectProfileName(page,'Alex');
+  await page.getByLabel('Display name',{exact:true}).fill('  Alex Example  ');
+  await page.getByRole('button',{name:'Save profile',exact:true}).click();
+  await page.getByText('Profile saved.',{exact:true}).waitFor();await expectProfileName(page,'Alex Example');
+  assert.deepEqual(f.state.calls.filter(c=>c.name==='update_profile').map(c=>c.args),[{p_display_name:'Alex Example'}]);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('sb-pact-fixture-auth-token')),authBefore,'Saving a profile must not replace the Auth session or Google metadata');
+  assert.equal(await other.page.locator('.member-card .person-name').filter({hasText:'Alex Example'}).count(),0,'Other member retains the prior snapshot until it refreshes');
+  await other.page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await other.page.locator('.member-card .person-name').filter({hasText:'Alex Example'}).waitFor();
+  assert.doesNotMatch(await other.page.locator('main').innerText(),/@example\.test/,'Member screens must not expose account emails');
+  const after=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(after.members.find(m=>m.id===ids[0]).name,'Alex Example');
+  assert.deepEqual(after.members.map(({id,role,status})=>({id,role,status})),before.members.map(({id,role,status})=>({id,role,status})));
+  for(const key of ['balances','expenses','shares','payments'])assert.deepEqual(after[key],before[key],`Profile update changed ${key}`);
+  for(const member of after.members)assert.deepEqual(Object.keys(member).sort(),['id','name','role','status']);
+  await page.reload();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await expectProfileName(page,'Alex Example');
+  assert.ok(f.state.calls.filter(c=>c.name==='get_profile').every(c=>c.id===c.actor),'Account reads must target the signed-in profile');
+  await done(f);
+ });
+ await test('Profile validation and server or authentication failure preserve the entered name for retry',async()=>{
+  const f=await fixture(),{page}=f;await openAccount(page);await expectProfileName(page,'Alex');
+  const field=page.getByLabel('Display name',{exact:true}),save=page.getByRole('button',{name:'Save profile',exact:true});
+  await field.fill('   ');
+  if(!await save.isDisabled())await save.click();
+  assert.equal(f.state.calls.filter(c=>c.name==='update_profile').length,0,'Whitespace-only names must not be submitted');
+  for(const failure of ['rejectOnce','authOnce']){
+   const name=failure==='rejectOnce'?'Alex Retried':'Alex Renewed';
+   await field.fill(name);f.state[failure]='update_profile';await save.click();
+   await page.getByRole('alert').filter({hasText:failure==='authOnce'?'Your session has ended. Sign in again to continue.':'We could not complete that action. Please try again.'}).waitFor();
+   assert.equal(await field.inputValue(),name);
+   if(failure==='authOnce')await page.getByRole('button',{name:'Sign in again',exact:true}).waitFor();
+   await save.click();await page.getByText('Profile saved.',{exact:true}).waitFor();await expectProfileName(page,name);
+   const attempts=f.state.calls.filter(c=>c.name==='update_profile').slice(-2);
+   assert.equal(attempts.length,2);assert.deepEqual(attempts.map(c=>c.args),[{p_display_name:name},{p_display_name:name}]);
+  }
+  await page.reload();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await expectProfileName(page,'Alex Renewed');
+  await done(f);
+ });
+ await test('A signed-in person without a household can edit their profile and keep appearance preference',async()=>{
+  const f=await fixture({empty:true}),{page}=f;await openAccount(page);await expectProfileName(page,'Alex');
+  await page.getByLabel('Display name',{exact:true}).fill('Alex New Home');
+  await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.getByText('Profile saved.',{exact:true}).waitFor();
+  await page.getByRole('combobox',{name:'Appearance',exact:true}).selectOption('dark');
+  await page.reload();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await expectProfileName(page,'Alex New Home');
+  assert.equal(await page.getByRole('combobox',{name:'Appearance',exact:true}).inputValue(),'dark');
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('pact:theme')),'dark');
+  await page.getByRole('button',{name:'Pact home',exact:true}).click();await page.getByRole('button',{name:'Create a household',exact:true}).waitFor();
+  assert.equal(f.state.calls.filter(c=>c.name==='create_space').length,0,'Profile changes must not create a household');
+  await done(f);
+ });
+ await test('System, Light and Dark appearance persist, follow the intended scheme and fit long names accessibly',async()=>{
+  const f=await fixture(),{page}=f,longName='Alexandria Example With A Long Household Display Name';
+  await openAccount(page);await expectProfileName(page,'Alex');
+  await page.getByLabel('Display name',{exact:true}).fill(longName);
+  await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.getByText('Profile saved.',{exact:true}).waitFor();
+  const appearance=page.getByRole('combobox',{name:'Appearance',exact:true});
+  assert.equal(await appearance.inputValue(),'system');
+  await page.emulateMedia({colorScheme:'light'});const light=await palette(page);
+  await page.emulateMedia({colorScheme:'dark'});const dark=await palette(page);assert.notDeepEqual(dark,light,'System appearance must react to an OS scheme change');
+  const profileWrites=f.state.calls.filter(c=>c.name==='update_profile').length;
+  for(const [choice,os,expected] of [['light','dark',light],['dark','light',dark],['system','light',light],['system','dark',dark]]){
+   await appearance.selectOption(choice);await page.emulateMedia({colorScheme:os});
+   assert.deepEqual(await palette(page),expected,`${choice} with OS ${os}`);
+   assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme??null),choice==='system'?null:choice);
+   const stored=await page.evaluate(()=>localStorage.getItem('pact:theme'));assert.ok(choice==='system'?stored===null||stored==='system':stored===choice);
+   await page.reload();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await expectProfileName(page,longName);
+   assert.equal(await appearance.inputValue(),choice);assert.deepEqual(await palette(page),expected,`${choice} persists after reload`);
+   for(const width of [320,390,768]){await page.setViewportSize({width,height:844});await layout(page,`profile-${choice}-${os}-${width}`);await accessibility(page,`profile-${choice}-${os}-${width}`);}
+   if(choice==='light'||choice==='dark'){await page.setViewportSize({width:390,height:844});await shot(page,`profile-${choice}`);}
+  }
+  assert.equal(f.state.calls.filter(c=>c.name==='update_profile').length,profileWrites,'Appearance changes stay on this browser');
+  await page.setViewportSize({width:390,height:844});await shot(page,'profile-dark');
+  await page.getByRole('button',{name:'Pact home',exact:true}).click();await page.getByRole('button',{name:'People & trips',exact:true}).click();
+  await page.locator('.member-card .person-name').filter({hasText:longName}).waitFor();
+  for(const width of [320,390,768]){await page.setViewportSize({width,height:844});await layout(page,`members-long-name-${width}`);await accessibility(page,`members-long-name-${width}`);}
+  assert.doesNotMatch(await page.locator('main').innerText(),/@example\.test/);
+  await page.setViewportSize({width:390,height:844});await shot(page,'members-long-name');await done(f);
+ });
  console.log('All local browser scenarios passed.');
 }finally{await browser.close();await server.close();}
