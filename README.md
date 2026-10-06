@@ -8,11 +8,11 @@ The idea is simple: one place to record what happened, choose who shares the cos
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with light and dark themes and a home-screen web app icon.
 
-This branch prepares the [profile and appearance preview](docs/RELEASE-0.4-PREVIEW.md). It is not a deployed release, and the separate 0.3.1 auto-fill update still needs to be reviewed and integrated.
+This branch prepares the [auto-fill, profile and appearance preview](docs/RELEASE-0.4-PREVIEW.md). It combines the custom-share improvements from 0.3.1 with basic profiles and device appearance preferences. It is not a deployed release.
 
 ## What it does
 
-- **Shared expenses:** choose the payer and participants, split equally or by exact amounts, and review before saving.
+- **Shared expenses:** choose the payer and participants, split equally or enter the amounts you know and calculate the remainder, then review before saving.
 - **Balances and repayments:** see who owes what; repayments affect balances when the recipient confirms them.
 - **Shopping:** add quantities, claim an item, record partial purchases, and turn a purchase into an expense.
 - **Trips:** include only the people going and keep trip costs separate from the household.

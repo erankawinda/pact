@@ -16,7 +16,7 @@ Pact is a personal project built around the practical friction of living with ot
 
 ## Planned product work
 
-The [profile and appearance preview](RELEASE-0.4-PREVIEW.md) is prepared on a separate branch. The custom-share auto-fill update needs its own source review and regression checks before the two are combined.
+The [combined preview](RELEASE-0.4-PREVIEW.md) includes reviewed custom-share auto-fill, basic profiles and device appearance choices. Hosted migration validation and two-account phone checks remain release gates.
 
 The next product priorities are:
 

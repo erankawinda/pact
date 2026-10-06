@@ -41,6 +41,8 @@ Readable tables use row-level security. Clients cannot write financial and workf
 
 Amounts use integer cents. Equal splits distribute leftover cents deterministically; exact splits must sum to the total. The current product uses AUD and Melbourne dates.
 
+Custom splits keep manual values separate from calculated shares. One unknown share receives the remainder; several unknown shares require the explicit equal-remainder choice. An entered zero is fixed, while a blank is unknown. Review freezes the resulting integer shares, so interrupted saves retry the same request rather than recalculating against a newer draft.
+
 Balances are derived from posted expenses and shares, refunds and confirmed repayments. Recording a pending repayment does not change balances. Corrections retain the voided original and create a replacement expense; refunds are bounded by the refundable amount. Activity records make changes inspectable.
 
 Request IDs and stored operation results let supported mutations reconcile a retry without applying the same request twice. Version checks detect edits based on stale state. Local tests exercise these rules, but they do not certify races across independent PostgreSQL connections.
