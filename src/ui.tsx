@@ -1,4 +1,5 @@
 import {useEffect, useRef, type ReactNode} from 'react';
+import {nameInitials} from './profile';
 
 export type IconName = 'plus' | 'back' | 'down' | 'expense' | 'balance' | 'people' | 'home' | 'trip' | 'check' | 'search' | 'close' | 'shopping' | 'menu' | 'arrow' | 'clock';
 const paths: Record<IconName, ReactNode> = {
@@ -33,7 +34,7 @@ export function Loading({text = 'Loading your household…'}: {text?: string}) {
   return <div className="loading" role="status"><span className="spinner" aria-hidden="true"/>{text}</div>;
 }
 export function Avatar({name}: {name: string}) {
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  const initials = nameInitials(name);
   return <span className="avatar" aria-hidden="true">{initials || '?'}</span>;
 }
 export function ScreenHeading({title, subtitle, children}: {title: string; subtitle?: string; children?: ReactNode}) {

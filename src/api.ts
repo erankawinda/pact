@@ -29,6 +29,14 @@ async function boundedFetch(input: RequestInfo | URL, init?: RequestInit): Promi
 }
 export const client = configured ? createClient(url,key,{global:{fetch:boundedFetch},auth:{flowType:'pkce',detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}}) : null;
 
+export async function fetchOwnProfile(userId: string): Promise<string> {
+  if (!client) throw new Error('The app has not been connected yet.');
+  const {data, error} = await client.from('profiles').select('display_name').eq('id', userId).single();
+  if (error) throw error;
+  if (typeof data?.display_name !== 'string') throw new Error('Your profile could not be loaded. Try again.');
+  return data.display_name;
+}
+
 export async function signInGoogle() {
   if (!client) throw new Error('Pact is not connected yet.');
   const {error} = await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/',scopes:'openid email profile',queryParams:{prompt:'select_account'}}});
