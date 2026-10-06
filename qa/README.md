@@ -12,7 +12,9 @@ Playwright and axe-core are pinned development dependencies. On Linux, install b
 
 The harness starts a local Vite server and headless Chromium. It overrides all frontend connection values with a fictional project, creates disposable PGlite databases, applies the actual migrations and intercepts external HTTP and WebSocket traffic. Google identities, households, shopping and transactions are synthetic. No real account, invitation or hosted database is used.
 
-The fourteen browser scenarios retain the ten existing checks for navigation, responsive layouts, light/dark accessibility scans, expense splits and drafts, uncertain request recovery, invitation handoff, shopping purchases, repayment confirmation, corrections/refunds, trips and membership changes. Four additional scenarios cover:
+The sixteen browser scenarios retain the ten original checks for navigation, responsive layouts, light/dark accessibility scans, expense splits and drafts, uncertain request recovery, invitation handoff, shopping purchases, repayment confirmation, corrections/refunds, trips and membership changes. Two custom-split scenarios cover automatic remainders, manually entered zero amounts, overruns and invalid decimals, deriving the total from entered shares, selection and mode changes, background refresh, saved drafts and Review → Edit. The uncertain-save scenario also verifies that retrying an automatically calculated custom split preserves its exact original request.
+
+Four profile and appearance scenarios cover:
 
 - Editing and trimming a display name, persistence after reload, another member seeing the new name after refresh, unchanged roles and ledger records, and no member-email exposure.
 - Invalid input, rejected saves and expired-auth responses retaining the entered name for retry.
