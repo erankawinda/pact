@@ -1,7 +1,7 @@
 import type {ExpenseInput} from './api';
 import {MAX_CENTS, splitEqual} from './money';
 
-export type PendingExpense = {input: ExpenseInput; shares: Record<string, number>; names: Record<string, string>; replaces?:string|null; version?:number; reason?:string; purchase?:string|null; legacy?:boolean};
+export type PendingExpense = {input: ExpenseInput; shares: Record<string, number>; names: Record<string, string>; replaces?:string|null; version?:number; reason?:string; purchase?:string|null; legacy?:boolean; autoPeople?:string[]; splitRemaining?:boolean};
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const key = (user: string, group: string) => `pact:pending-expense:${user}:${group}`;
 

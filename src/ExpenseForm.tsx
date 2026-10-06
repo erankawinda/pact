@@ -1,11 +1,11 @@
 import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {rpc, reauthenticate, type Expense, type Group, type Snapshot} from './api';
 import {authError, definitelyRejected, message} from './errors';
-import {displayDate, exactShares, money, parseMoney, splitEqual, today} from './money';
+import {displayDate, money, parseMoney, planCustomSplit, splitEqual, today} from './money';
 import {clearPending, readPending, rememberPending, type PendingExpense} from './pendingExpense';
 import {Alert, Avatar, FormHeader, Icon, moveToTop} from './ui';
 
-type Draft = {description:string;amount:string;payer:string;people:string[];mode:'equal'|'exact';exact:Record<string,string>;date:string;category:string;note:string;reason:string};
+type Draft = {description:string;amount:string;payer:string;people:string[];mode:'equal'|'exact';exact:Record<string,string>;date:string;category:string;note:string;reason:string;splitRemaining?:boolean};
 export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, initial, purchaseId, purchaseName}: {
   group: Group; snapshot: Snapshot; userId: string; online: boolean; onBack: () => void; onSaved: () => void;
   initial?:Expense; purchaseId?:string; purchaseName?:string;
@@ -30,6 +30,8 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
   const [people, setPeople] = useState<string[]>(start.people);
   const [mode, setMode] = useState<'equal' | 'exact'>(start.mode);
   const [exact, setExact] = useState<Record<string, string>>(start.exact);
+  const [splitRemaining, setSplitRemaining] = useState(start.splitRemaining === true);
+  const [focusedShare, setFocusedShare] = useState<string | null>(null);
   const [date, setDate] = useState(start.date);
   const [category, setCategory] = useState(start.category);
   const [note, setNote] = useState(start.note);
@@ -50,9 +52,9 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
 
   useEffect(() => {
     if(review)return;
-    try {localStorage.setItem(draftKey,JSON.stringify({description,amount,payer,people,mode,exact,date,category,note,reason}));setStorageError('');}
+    try {localStorage.setItem(draftKey,JSON.stringify({description,amount,payer,people,mode,exact,date,category,note,reason,splitRemaining}));setStorageError('');}
     catch {setStorageError('Your browser cannot keep this draft. Allow site storage before saving or leaving this screen.');}
-  },[draftKey,description,amount,payer,people,mode,exact,date,category,note,reason,review]);
+  },[draftKey,description,amount,payer,people,mode,exact,date,category,note,reason,splitRemaining,review]);
   const memberKey=members.map(m=>m.id).sort().join(',');
   useEffect(()=>{
     if(review)return;
@@ -71,16 +73,16 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
   // Clear resolved validation on input changes, never on background refreshes.
   useEffect(() => {
     if (!review && !recovery.error) setError('');
-  }, [description, amount, payer, people, mode, exact, date, category, note]);
+  }, [description, amount, payer, people, mode, exact, splitRemaining, date, category, note]);
 
   let cents = 0;
   try { cents = parseMoney(amount); } catch { /* Show validation when the user reviews. */ }
   let liveShares: Record<string, number> = {};
   if (cents && people.length && mode === 'equal') liveShares = splitEqual(cents, people);
-  let allocated = 0, exactValid = true;
-  for (const person of people) {
-    try { allocated += parseMoney(exact[person] ?? '', true); } catch { exactValid = false; }
-  }
+  const customSplit = planCustomSplit(cents || null, people, exact, splitRemaining);
+  let totalIsEmpty = !amount.trim();
+  try { totalIsEmpty ||= parseMoney(amount, true) === 0; } catch { /* Keep an invalid total visible for correction. */ }
+  const suggestedTotal = mode === 'exact' && totalIsEmpty ? customSplit.suggestedTotal : null;
 
   function leave() {
     if (busy) return;
@@ -96,8 +98,10 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
       if (!members.some(m => m.id === payer)) throw new Error('Choose who paid.');
       if (people.some(id=>!members.some(m=>m.id===id))) throw new Error('Check the people sharing this expense.');
       if(initial && !reason.trim())throw new Error('Add a short reason for the correction.');
-      const shares = mode === 'equal' ? splitEqual(total, people) : exactShares(total, people, exact);
-      setReview({replaces:initial?.id??null,version:initial?.version,reason:reason.trim(),purchase:purchaseId??null,shares, names: Object.fromEntries(snapshot.members.map(m => [m.id, m.name])), input: {
+      const split = planCustomSplit(total, people, exact, splitRemaining);
+      if (mode === 'exact' && split.issue) throw new Error(split.issue);
+      const shares = mode === 'equal' ? splitEqual(total, people) : split.shares;
+      setReview({replaces:initial?.id??null,version:initial?.version,reason:reason.trim(),purchase:purchaseId??null,shares, autoPeople:mode==='exact'?split.autoIds:[], splitRemaining, names: Object.fromEntries(snapshot.members.map(m => [m.id, m.name])), input: {
         p_group: group.id, p_request: crypto.randomUUID(), p_description: description.trim(), p_amount: total,
         p_payer: payer, p_people: [...people].sort(), p_mode: mode, p_exact: mode === 'exact' ? shares : null,
         p_date: date, p_category: category, p_note: note.trim(),
@@ -136,7 +140,10 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
     setReason(review.reason??'');
     setDescription(input.p_description); setAmount((input.p_amount / 100).toFixed(2)); setPayer(input.p_payer);
     setPeople(input.p_people); setMode(input.p_mode); setDate(input.p_date); setCategory(input.p_category); setNote(input.p_note);
-    setExact(Object.fromEntries(Object.entries(review.shares).map(([id, value]) => [id, (value / 100).toFixed(2)])));
+    const automatic = new Set(Array.isArray(review.autoPeople) ? review.autoPeople.filter(id => input.p_people.includes(id)) : []);
+    setExact(Object.fromEntries(Object.entries(review.shares).map(([id, value]) => [id, automatic.has(id) ? '' : (value / 100).toFixed(2)])));
+    setSplitRemaining(review.splitRemaining === true);
+    setFocusedShare(null);
     setReview(null); setError(''); moveToTop();
   }
   return <section className="form-page expense-form">
@@ -160,16 +167,21 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
       <label>Who paid?<select value={payer} required onChange={e => setPayer(e.target.value)}><option value="" disabled>Choose a person</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}{m.id === userId ? ' (you)' : ''}</option>)}</select></label>
       <fieldset className="split-section"><legend>Split between</legend><p className="helper">Tap everyone sharing this expense.</p>
         <div className="split-tools"><div className="segmented" role="group" aria-label="Split method"><button type="button" aria-pressed={mode === 'equal'} onClick={() => setMode('equal')}>Equally</button><button type="button" aria-pressed={mode === 'exact'} onClick={() => setMode('exact')}>Custom amounts</button></div><button className="text-button" type="button" onClick={() => setPeople(people.length === members.length ? [] : members.map(m => m.id))}>{people.length === members.length ? 'Clear' : 'Select all'}</button></div>
+        {mode === 'exact' && <p className="helper" id="custom-split-help">Enter the amounts you know. One blank share is calculated automatically. Clear an amount to let Pact calculate it again.</p>}
         <div className="list-panel split-list">{members.map(member => {
           const selected = people.includes(member.id);
+          const automatic = customSplit.autoIds.includes(member.id);
+          const calculated = automatic ? (customSplit.shares[member.id] / 100).toFixed(2) : '';
           return <div className={`split-row ${selected ? 'selected' : ''}`} key={member.id}>
             <label className="person-toggle"><input type="checkbox" checked={selected} onChange={e => setPeople(old => e.target.checked ? [...old, member.id] : old.filter(id => id !== member.id))}/><span className="checkbox-mark" aria-hidden="true">{selected && <Icon name="check"/>}</span><span className="person-name">{member.name}{member.id === userId && <small>You</small>}</span></label>
-            {selected && mode === 'exact' ? <label className="exact-input"><span className="sr-only">{member.name}'s share</span><input required inputMode="decimal" aria-label={`${member.name}'s share`} placeholder="0.00" value={exact[member.id] ?? ''} onChange={e => setExact({...exact, [member.id]: e.target.value})}/></label> : selected && liveShares[member.id] !== undefined ? <strong className="share-amount">{money(liveShares[member.id])}</strong> : null}
+            {selected && mode === 'exact' ? <label className={`exact-input ${automatic ? 'automatic-share' : ''}`}><span className="sr-only">{member.name}'s share</span><input inputMode="decimal" autoComplete="off" aria-label={`${member.name}'s share`} aria-describedby={automatic ? `auto-share-${member.id}` : 'custom-split-help'} aria-invalid={customSplit.invalidIds.includes(member.id) || undefined} placeholder={calculated || '—'} value={automatic && focusedShare !== member.id ? calculated : exact[member.id] ?? ''} onFocus={() => setFocusedShare(member.id)} onBlur={() => setFocusedShare(null)} onChange={e => setExact(old => ({...old, [member.id]: e.target.value}))}/>{automatic && <small className="auto-share-label" id={`auto-share-${member.id}`}>Auto<span className="sr-only">: {money(customSplit.shares[member.id])}. Enter an amount to change it.</span></small>}</label> : selected && liveShares[member.id] !== undefined ? <strong className="share-amount">{money(liveShares[member.id])}</strong> : null}
           </div>;
         })}</div>
-        <p className={`split-status ${mode === 'exact' && cents && allocated !== cents ? 'needs-attention' : ''}`} aria-live="polite">
-          {!people.length ? 'No one selected yet.' : mode === 'equal' ? `${people.length} ${people.length === 1 ? 'person' : 'people'} selected${cents ? ' · shares shown above' : ''}` : !exactValid ? 'Enter an amount for every selected person. Use 0 if their share is zero.' : !cents ? 'Enter the total amount above.' : allocated === cents ? `Total matches · ${money(cents)}` : allocated < cents ? `${money(cents - allocated)} left to allocate` : `${money(allocated - cents)} over the total`}
+        <p className={`split-status ${mode === 'exact' && cents && customSplit.issue ? 'needs-attention' : ''}`} aria-live="polite">
+          {!people.length ? 'No one selected yet.' : mode === 'equal' ? `${people.length} ${people.length === 1 ? 'person' : 'people'} selected${cents ? ' · shares shown above' : ''}` : customSplit.issue ?? `Total matches · ${money(cents)}${customSplit.autoIds.length ? ` · ${customSplit.autoIds.length} ${customSplit.autoIds.length === 1 ? 'share' : 'shares'} calculated automatically` : ''}`}
         </p>
+        {mode === 'exact' && customSplit.canSplitRemaining && !splitRemaining && <button type="button" className="subtle full" onClick={() => setSplitRemaining(true)}>Split remaining equally</button>}
+        {suggestedTotal !== null && <button type="button" className="subtle full" onClick={() => setAmount((suggestedTotal / 100).toFixed(2))}>Use {money(suggestedTotal)} as total</button>}
       </fieldset>
       <details className="optional-fields"><summary><span>Date, category & note<small>{displayDate(date)} · {category === 'takeaway' ? 'Takeout' : category[0].toUpperCase() + category.slice(1)}</small></span><Icon name="down"/></summary><div className="optional-content">
         <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)}/></label>

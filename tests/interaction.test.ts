@@ -28,6 +28,16 @@ test('unfinished expense recovers the exact request and remains isolated by user
   clearPending('a', 'home', storage);
   assert.equal(readPending('a', 'home', storage), null);
 });
+
+test('automatic split metadata survives recovery without changing the committed payload',()=>{
+  const storage=memoryStorage();
+  const value:PendingExpense={...pending,input:{...pending.input,p_mode:'exact',p_exact:{b:51,c:50}},autoPeople:['b','c'],splitRemaining:true};
+  rememberPending('a',value,storage);
+  const restored=readPending('a','home',storage);
+  assert.deepEqual(restored,value);
+  assert.deepEqual(restored?.input.p_exact,{b:51,c:50});
+  assert.deepEqual(restored?.autoPeople,['b','c']);
+});
 test('recovery fails closed when storage is corrupt or unavailable', () => {
   const storage = memoryStorage();
   storage.setItem('pact:pending-expense:a:home', '{broken');

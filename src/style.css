@@ -7,3 +7,9 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
 
 .profile-summary{display:flex;align-items:center;gap:12px;margin:0 0 22px;min-width:0}.profile-summary strong{min-width:0;overflow-wrap:anywhere}.profile-summary .avatar{width:48px;height:48px;font-size:1rem}.profile-membership{border-top:1px solid var(--line);padding-top:16px;margin-top:22px}
+
+/* Calculated shares stay editable; only explicitly entered amounts are stored. */
+.exact-input{width:120px;flex-shrink:0;padding:10px 0;max-width:48%}
+.automatic-share input::placeholder{color:var(--ink);opacity:1}
+.auto-share-label{display:block;margin-top:4px;text-align:right;font-size:.6875rem;font-weight:600;color:var(--accent)}
+@media(max-width:360px){.split-row:has(.exact-input){flex-wrap:wrap;padding-bottom:10px}.split-row:has(.exact-input) .person-toggle{flex-basis:100%;padding-bottom:2px}.split-row .exact-input{width:140px;margin-left:auto;padding:0}}
