@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm test && npm run build",
+    "check:privacy": "node scripts/check-public-privacy.mjs",
+    "check": "npm run check:privacy && npm test && npm run build",
     "test:browser": "node qa/browser.mjs",
     "test:privacy-browser": "node qa/privacy-browser.mjs",
     "test:notifications-browser": "node qa/notifications-browser.mjs"
