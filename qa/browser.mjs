@@ -14,13 +14,14 @@ const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPA
 const browser=await chromium.launch({...(process.env.PACT_CHROMIUM_PATH?{executablePath:process.env.PACT_CHROMIUM_PATH}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
 const host='http://127.0.0.1:4173',out='qa/artifacts/screenshots';mkdirSync(out,{recursive:true});
 const ids=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];const names=['Alex','Blake','Casey','Devin'];const results=[];
-async function fixture({empty=false,signedIn=true,width=390,scheme='light'}={}){
+async function fixture({empty=false,signedIn=true,width=390,scheme='light',requireApproval=false}={}){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
  for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort())await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
  for(const [i,id] of ids.entries())await db.query("insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values($1,$2,now(),$3)",[id,`${names[i].toLowerCase()}@example.test`,JSON.stringify({full_name:names[i]})]);
  let queue=Promise.resolve();function sql(actor,query,args=[]){const run=queue.then(async()=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);await db.exec('set role authenticated');return db.query(query,args);});queue=run.catch(()=>{});return run;}
  async function call(actor,name,args){assert.match(name,/^[a-z_]+$/);const keys=Object.keys(args);keys.forEach(k=>assert.match(k,/^p_[a-z_]+$/));const params=keys.map((k,i)=>`${k}=>$${i+1}`).join(',');const values=keys.map(k=>args[k]!==null&&typeof args[k]==='object'&&!Array.isArray(args[k])?JSON.stringify(args[k]):args[k]);const result=await sql(actor,`select public.${name}(${params}) as value`,values);return result.rows[0].value;}
  let home='',trip='';if(!empty){home=await call(ids[0],'create_space',{p_name:'Our home',p_kind:'household',p_parent:null,p_people:[],p_request:randomUUID()});for(let i=1;i<ids.length;i++){const token=await call(ids[0],'create_invitation',{p_group:home,p_email:`${names[i].toLowerCase()}@example.test`});await call(ids[i],'accept_invitation',{p_token:token});}trip=await call(ids[0],'create_space',{p_name:'Weekend away',p_kind:'trip',p_parent:home,p_people:[ids[1]],p_request:randomUUID()});for(const [description,amount,payer,people,category,date] of [['Weekly groceries',8640,ids[0],ids,'groceries','2026-10-03'],['Friday takeout',5400,ids[1],ids.slice(0,3),'takeaway','2026-10-02']])await call(ids[0],'save_expense',{p_input:{p_group:home,p_request:randomUUID(),p_description:description,p_amount:amount,p_payer:payer,p_people:people,p_mode:'equal',p_exact:null,p_date:date,p_category:category,p_note:''}});}
+ if(requireApproval)for(const actor of ids)await call(actor,'set_payment_preferences',{p_require_approval:true});
  const state={calls:[],errors:[],unexpected:[],abortOnce:'',authOnce:'',rejectOnce:'',hangOnce:'',delayInvite:0};const contexts=[];
  async function createPage(actor=ids[0],options={}){const context=await browser.newContext({viewport:{width,height:844},deviceScaleFactor:1,colorScheme:scheme,reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write'],...options});contexts.push(context);const i=ids.indexOf(actor);const user={id:actor,aud:'authenticated',role:'authenticated',email:`${names[i].toLowerCase()}@example.test`,email_confirmed_at:'2026-10-01T00:00:00Z',app_metadata:{provider:'google',providers:['google']},user_metadata:{full_name:names[i]},created_at:'2026-10-01T00:00:00Z'};const session={access_token:[{alg:'HS256',typ:'JWT'},{sub:actor,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'fixture'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.'),refresh_token:'local-only',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user};
  if(signedIn)await context.addInitScript(({session})=>{if(!localStorage.getItem('sb-pact-fixture-auth-token'))localStorage.setItem('sb-pact-fixture-auth-token',JSON.stringify(session));},{session});
@@ -182,10 +183,174 @@ try{
  await test('Save deadline leaves recoverable state and expired authentication offers sign-in',async()=>{const f=await fixture();const {page}=f;await addExpense(page,{name:'Timeout test'});await page.getByRole('button',{name:'Review expense'}).click();await page.clock.install();f.state.hangOnce='save_expense';await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.waitForFunction(()=>!!Object.keys(localStorage).find(k=>k.startsWith('pact:pending-expense:')));await page.clock.fastForward(31000);await page.getByRole('button',{name:'Check this save',exact:true}).waitFor();f.state.authOnce='save_expense';await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByRole('button',{name:'Sign in again',exact:true}).waitFor();assert.ok(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('pact:pending-expense:'))));await page.getByRole('button',{name:'Check this save',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();await done(f);});
  await test('Invitation opened in active app, account switching preserves link, busy email is frozen',async()=>{const f=await fixture();const {page}=f;const token='a'.repeat(64);await page.evaluate(t=>{location.hash='invite='+t;},token);await page.getByRole('heading',{name:'Join your people'}).waitFor();assert.equal(await page.getByLabel('Invitation link or code').inputValue(),token);await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.evaluate(()=>sessionStorage.getItem('our-place-invite')),token);await page.evaluate(t=>{location.hash='invite='+t;},token);await page.getByRole('button',{name:'Use a different Google account'}).click();await page.getByText('Local sign-in handoff',{exact:true}).waitFor();assert.match(f.state.calls.find(c=>c.name==='oauth').url,/prompt=select_account/);await page.goto(host);await page.getByRole('heading',{name:'Join your people'}).waitFor();assert.equal(await page.getByLabel('Invitation link or code').inputValue(),token);await page.evaluate(()=>sessionStorage.removeItem('our-place-invite'));await page.goto(host);await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Invite a flatmate',exact:true}).click();await page.getByLabel('Google email').fill('new.person@example.test');f.state.delayInvite=300;await page.getByRole('button',{name:'Create invitation link'}).click();assert.equal(await page.getByLabel('Google email').isDisabled(),true);await page.getByRole('heading',{name:'Share the invitation'}).waitFor();assert.match(await page.locator('main').innerText(),/new.person@example.test/);await done(f);});
  await test('Shopping add, claim, partial buy, cost link, duplicate protection and undo',async()=>{const f=await fixture();const {page}=f;await nav(page,'Shopping').click();await page.getByRole('button',{name:'Add item',exact:true}).click();await page.getByLabel('Item',{exact:true}).fill('Milk');await page.getByLabel('Quantity',{exact:true}).fill('2');await page.getByLabel('Unit (optional)').fill('bottles');await page.getByRole('button',{name:'Add to list',exact:true}).click();await page.getByRole('button',{name:'I’ll get it'}).click();await page.getByText('You’re getting this',{exact:true}).waitFor();await page.getByText('Bought part of it?',{exact:true}).click();await page.getByLabel('Quantity bought').fill('1');await page.getByRole('button',{name:'Save quantity',exact:true}).click();await page.getByRole('button',{name:'Bought · 1',exact:true}).click();await page.getByRole('button',{name:'Add its cost'}).click();assert.equal(await page.getByLabel('What was it for?').inputValue(),'Milk');await page.getByLabel('Amount · AUD').fill('3');await page.getByRole('button',{name:'Select all',exact:true}).click();await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();await nav(page,'Shopping').click();await shot(page,'shopping-needed');await page.getByRole('button',{name:'Bought · 1'}).click();assert.equal(await page.getByRole('button',{name:'Add its cost'}).count(),0);await page.getByRole('button',{name:'Undo',exact:true}).click();await page.getByRole('button',{name:'Undo purchase',exact:true}).click();await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/void.*linked expense/i);await shot(page,'shopping-purchased');const s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.shopping[0].remaining),1);assert.equal(s.purchases.length,1);assert.ok(s.purchases[0].expense_id);await done(f);});
- await test('Repayment recorded by sender and confirmed by recipient; balances change only on confirmation',async()=>{const f=await fixture();const {page:sender}=await f.createPage(ids[2]);await nav(sender,'Balances').click();await sender.getByRole('button',{name:'Record a repayment',exact:true}).click();await sender.getByLabel('Paid to').selectOption(ids[0]);await sender.getByLabel('Amount · AUD').fill('39.60');await sender.getByRole('button',{name:'Record repayment',exact:true}).click();await sender.getByRole('heading',{name:'Balances',exact:true}).waitFor();let s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),-3960);const {page}=f;await nav(page,'Balances').click();await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByRole('heading',{name:'Waiting for confirmation'}).waitFor({state:'hidden'});s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),0);assert.equal(s.payments[0].status,'confirmed');await shot(page,'repayment-confirmed');await done(f);});
+ await test('Repayment recorded by sender and confirmed by recipient; balances change only on confirmation',async()=>{const f=await fixture({requireApproval:true});const {page:sender}=await f.createPage(ids[2]);await nav(sender,'Balances').click();await sender.getByRole('button',{name:'Record a repayment',exact:true}).click();await sender.getByLabel('Paid to').selectOption(ids[0]);await sender.getByLabel('Amount · AUD').fill('39.60');await sender.getByRole('button',{name:'Record repayment',exact:true}).click();await sender.getByRole('heading',{name:'Balances',exact:true}).waitFor();let s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),-3960);const {page}=f;await nav(page,'Balances').click();await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByRole('heading',{name:'Waiting for confirmation'}).waitFor({state:'hidden'});s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(Number(s.balances.find(b=>b.user_id===ids[2]).cents),0);assert.equal(s.payments[0].status,'confirmed');await shot(page,'repayment-confirmed');await done(f);});
  await test('Expense correction keeps old record, refunds adjust balances, CSV exports safely',async()=>{const f=await fixture();const {page}=f;await nav(page,'Expenses').click();const row=page.locator('.expense-row').filter({hasText:'Weekly groceries'});await row.locator('summary').click();await row.getByRole('button',{name:'Correct expense'}).click();await page.getByLabel('Amount · AUD').fill('80');await page.getByLabel('Reason for correction').fill('Correct receipt total');await page.getByRole('button',{name:'Review expense'}).click();await page.getByRole('button',{name:'Save expense',exact:true}).click();await page.getByText('Expense saved.',{exact:true}).waitFor();let s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.expenses.filter(e=>e.description==='Weekly groceries').length,2);await page.locator('.expense-row').filter({hasText:'Weekly groceries'}).filter({hasText:'Voided · kept in history'}).waitFor({state:'visible'});const corrected=page.locator('.expense-row').filter({hasText:'Weekly groceries'}).filter({hasNotText:'Voided · kept in history'});await corrected.locator('summary').click();await corrected.getByRole('button',{name:'Record refund'}).click();await page.getByRole('dialog').getByLabel('Amount · AUD').fill('4');await page.getByRole('dialog').getByLabel('Reason').fill('Returned item');await page.getByRole('dialog').getByRole('button',{name:'Record refund'}).click();await page.getByRole('dialog').waitFor({state:'hidden'});s=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(s.refunds[0].amount_cents,400);assert.equal(s.refund_shares.reduce((a,v)=>a+Number(v.share_cents),0),400);await page.getByRole('button',{name:'Household menu',exact:true}).click();await page.getByRole('button',{name:'Settings & exports'}).click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();const file=await downloading;const path=await file.path();const csv=readFileSync(path,'utf8');assert.match(csv,/Expense share/);assert.match(csv,/Refund share/);assert.match(csv,/Correct receipt total/);await done(f);});
  await test('Trip selection includes chosen household members and membership changes update an open expense form',async()=>{const f=await fixture();const {page}=f;await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByLabel('Trip name').fill('Coast weekend');await page.getByRole('checkbox',{name:'Casey',exact:true}).check();await page.getByRole('button',{name:'Create trip',exact:true}).click();await page.getByRole('heading',{name:'People & trips'}).waitFor();const call=f.state.calls.filter(c=>c.name==='create_space').at(-1);assert.deepEqual(call.args.p_people,[ids[2]]);await page.getByRole('button',{name:'Household menu',exact:true}).click();await page.getByRole('button',{name:'Our home',exact:true}).click();await addExpense(page,{name:'Membership changes',people:['Casey']});await page.getByRole('button',{name:'Custom amounts',exact:true}).click();assert.equal(await page.getByLabel("Casey's share",{exact:true}).inputValue(),'10.01');await f.call(ids[0],'group_action',{p_group:f.home,p_action:'remove_member',p_target:ids[2],p_value:'',p_request:randomUUID()});await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByText('The people in this household changed.',{exact:false}).waitFor();assert.equal(await page.getByRole('checkbox',{name:'Casey',exact:true}).count(),0);assert.match(await page.locator('.split-status').innerText(),/No one selected/);assert.equal(await page.locator('.exact-input input').count(),0);assert.equal(await page.locator('.auto-share-label').count(),0);await done(f);});
  await test('Large balances remain unbroken at 320px; realtime fallback refreshes on focus',async()=>{const f=await fixture({width:320});await f.call(ids[0],'save_expense',{p_input:{p_group:f.home,p_request:randomUUID(),p_description:'Large test purchase',p_amount:100000000,p_payer:ids[0],p_people:[ids[1]],p_mode:'equal',p_exact:null,p_date:'2026-10-05',p_category:'other',p_note:''}});await f.page.evaluate(()=>window.dispatchEvent(new Event('focus')));await f.page.getByText('$1,000,046.80',{exact:true}).waitFor();await layout(f.page,'large balance320');const info=await f.page.locator('.balance-summary>strong').evaluate(el=>({height:el.getBoundingClientRect().height,lineHeight:parseFloat(getComputedStyle(el).lineHeight),whiteSpace:getComputedStyle(el).whiteSpace}));assert.equal(info.whiteSpace,'nowrap');assert.ok(info.height<=info.lineHeight+1);await shot(f.page,'large-balance-320');await done(f);});
+ await test('Recipient records a partial payment, both accounts see exact balances, and reversal preserves history',async()=>{
+  const f=await fixture(),{page}=f,{page:sender}=await f.createPage(ids[2]);
+  await nav(page,'Balances').click();await nav(sender,'Balances').click();
+  await page.locator('.payment-card').filter({hasText:'Casey → Alex'}).getByRole('button',{name:'I received this',exact:true}).click();
+  assert.equal(await page.getByLabel('Received from').inputValue(),ids[2]);
+  assert.equal(await page.getByLabel('Amount · AUD').inputValue(),'39.60');
+  const submit=page.getByRole('button',{name:'Confirm money received',exact:true});
+  assert.equal(await submit.isDisabled(),true);
+  await page.getByLabel('Amount · AUD').fill('10.01');
+  await page.getByLabel('Date',{exact:true}).fill('2026-10-11');
+  for(const width of [320,390,768]){await page.setViewportSize({width,height:844});await layout(page,`received payment ${width}`);}
+  await page.setViewportSize({width:390,height:844});
+  for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await accessibility(page,`received payment ${scheme}`);await shot(page,`received-payment-${scheme}`);}
+  await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).check();
+  await submit.click();await page.getByRole('heading',{name:'Balances',exact:true}).waitFor();
+  let state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,1);assert.equal(state.payments[0].status,'confirmed');
+  assert.equal(state.payments[0].recorded_by,ids[0]);assert.equal(state.payments[0].amount_cents,1001);
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[0]).cents),3679);
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),-2959);
+  assert.equal(state.activity.filter(a=>a.action==='payment_received').length,1);
+  await sender.getByRole('button',{name:'Refresh',exact:true}).click();
+  await sender.locator('.balance-summary>strong').filter({hasText:'$29.59'}).waitFor();
+  await page.getByText('Repayment history',{exact:true}).click();
+  await page.getByText('Recorded by Alex',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Reverse record',exact:true}).click();
+  await page.getByRole('dialog').getByLabel('Reason').fill('Entered the wrong transfer');
+  await page.getByRole('dialog').getByRole('button',{name:'Reverse repayment',exact:true}).click();
+  await page.getByRole('dialog').waitFor({state:'hidden'});
+  state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,1);assert.equal(state.payments[0].status,'reversed');
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),-3960);
+  await done(f);
+ });
+ await test('Recipient confirms an existing pending record instead of creating a second repayment',async()=>{
+  const f=await fixture({requireApproval:true}),{page}=f;
+  await f.call(ids[2],'record_payment',{p_group:f.home,p_recipient:ids[0],p_amount:3960,p_date:'2026-10-11',p_note:'Already sent',p_request:randomUUID()});
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await nav(page,'Balances').click();await page.getByRole('button',{name:'I received money',exact:true}).click();
+  await page.getByLabel('Received from').selectOption(ids[2]);
+  await page.getByRole('heading',{name:'Already waiting for confirmation',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Confirm money received',exact:true}).isDisabled(),true);
+  assert.equal(await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).isDisabled(),true);
+  await accessibility(page,'pending received payment');await shot(page,'received-payment-pending');
+  await page.getByRole('button',{name:'Confirm received',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Confirm received',exact:true}).click();
+  await page.getByRole('heading',{name:'Balances',exact:true}).waitFor();
+  const state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,1);assert.equal(state.payments[0].status,'confirmed');
+  assert.equal(state.payments[0].recorded_by,ids[2]);
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),0);
+  assert.equal(f.state.calls.filter(c=>c.name==='record_repayment').length,0);
+  await done(f);
+ });
+ await test('Matching transfers require explicit separate-payment confirmation; a stale form cannot duplicate a pending record',async()=>{
+  const f=await fixture({requireApproval:true}),{page}=f;
+  await f.call(ids[0],'record_repayment',{p_group:f.home,p_other:ids[2],p_direction:'received',p_amount:1000,p_date:'2026-10-11',p_note:'First transfer',p_separate:false,p_request:randomUUID()});
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await nav(page,'Balances').click();await page.getByRole('button',{name:'I received money',exact:true}).click();
+  await page.getByLabel('Received from').selectOption(ids[2]);await page.getByLabel('Amount · AUD').fill('10');
+  await page.getByLabel('Date',{exact:true}).fill('2026-10-11');
+  await page.getByRole('heading',{name:'Check this existing record',exact:true}).waitFor();
+  const submit=page.getByRole('button',{name:'Confirm money received',exact:true});
+  await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).check();
+  assert.equal(await submit.isDisabled(),true);
+  await page.getByRole('checkbox',{name:'This is a separate payment',exact:true}).check();
+  assert.equal(await submit.isDisabled(),true,'Separate payment acknowledgment must require receipt confirmation again');
+  await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).check();
+  await submit.click();await page.getByRole('heading',{name:'Balances',exact:true}).waitFor();
+  let state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(state.payments.length,2);
+  assert.equal(f.state.calls.filter(c=>c.name==='record_repayment').at(-1).args.p_separate,true);
+  await page.getByRole('button',{name:'I received money',exact:true}).click();
+  await page.getByLabel('Received from').selectOption(ids[2]);await page.getByLabel('Amount · AUD').fill('5');
+  await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).check();
+  // Another account writes after this form's snapshot. The server must reject
+  // the receipt even when the already-pending payment has a different amount.
+  await f.call(ids[2],'record_payment',{p_group:f.home,p_recipient:ids[0],p_amount:600,p_date:'2026-10-11',p_note:'Arrived while form was open',p_request:randomUUID()});
+  await submit.click();
+  await page.getByRole('alert').filter({hasText:'There is already a repayment from this person waiting for confirmation.'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Check action',exact:true}).count(),0);
+  state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,3);assert.equal(state.payments.filter(p=>p.status==='confirmed').length,2);
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await page.getByRole('heading',{name:'Already waiting for confirmation',exact:true}).waitFor();
+  assert.equal(await submit.isDisabled(),true);await done(f);
+ });
+ await test('A lost recipient-save response survives reload and retries exactly once without changing balances twice',async()=>{
+  const f=await fixture(),{page}=f;
+  await nav(page,'Balances').click();await page.getByRole('button',{name:'I received money',exact:true}).click();
+  await page.getByLabel('Received from').selectOption(ids[2]);await page.getByLabel('Amount · AUD').fill('39.60');
+  await page.getByRole('checkbox',{name:'I confirm I have received this money.',exact:true}).check();
+  f.state.abortOnce='record_repayment';await page.getByRole('button',{name:'Confirm money received',exact:true}).click();
+  await page.getByRole('button',{name:'Check action',exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Received from').isDisabled(),true);
+  assert.equal(await page.getByLabel('Amount · AUD').isDisabled(),true);
+  await page.reload();await page.getByRole('button',{name:'Check action',exact:true}).click();
+  await page.getByRole('button',{name:'Check action',exact:true}).waitFor({state:'hidden'});
+  const calls=f.state.calls.filter(c=>c.name==='record_repayment');assert.equal(calls.length,2);assert.deepEqual(calls[0].args,calls[1].args);
+  const state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,1);assert.equal(state.payments[0].status,'confirmed');
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),0);
+  assert.equal(state.activity.filter(a=>a.action==='payment_received').length,1);
+  await done(f);
+ });
+ await test('Sender payments settle automatically by default and lost responses recover without a second payment',async()=>{
+  const f=await fixture(),{page}=await f.createPage(ids[2]);
+  await nav(page,'Balances').click();await page.getByRole('button',{name:'Record a repayment',exact:true}).click();
+  await page.getByLabel('Paid to').selectOption(ids[0]);await page.getByLabel('Amount · AUD').fill('39.60');
+  await page.getByText('Alex allows automatic settlement. Saving updates both people’s balances immediately.',{exact:true}).waitFor();
+  f.state.abortOnce='record_repayment';await page.getByRole('button',{name:'Record repayment',exact:true}).click();
+  await page.getByRole('button',{name:'Check action',exact:true}).waitFor();
+  await page.reload();await page.getByRole('button',{name:'Check action',exact:true}).click();
+  await page.getByRole('button',{name:'Check action',exact:true}).waitFor({state:'hidden'});
+  const state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments.length,1);assert.equal(state.payments[0].status,'confirmed');
+  assert.equal(state.payments[0].confirmation_method,'automatic');assert.equal(state.payments[0].recorded_by,ids[2]);
+  assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),0);
+  const calls=f.state.calls.filter(c=>c.name==='record_repayment');assert.equal(calls.length,2);assert.deepEqual(calls[0].args,calls[1].args);
+  await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('heading',{name:'Balances',exact:true}).waitFor();await page.getByText('Repayment history',{exact:true}).click();
+  await page.getByText('Settled automatically',{exact:false}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Confirm received',exact:true}).count(),0);
+  await done(f);
+ });
+ await test('Recipients control their own approval preference; changing it leaves existing pending payments untouched',async()=>{
+  const f=await fixture(),{page}=f,{page:sender}=await f.createPage(ids[2]);
+  await openAccount(page);
+  const requireApproval=page.getByRole('checkbox',{name:'Require my approval for repayments to me',exact:true});
+  await requireApproval.waitFor();assert.equal(await requireApproval.isChecked(),false);
+  await requireApproval.check();await page.getByRole('button',{name:'Save payment preference',exact:true}).click();
+  await page.getByText('Payment preference saved.',{exact:true}).waitFor();await page.reload();
+  await requireApproval.waitFor();assert.equal(await requireApproval.isChecked(),true);
+  assert.equal(await f.call(ids[0],'get_payment_preferences',{}),true);
+  assert.equal(await f.call(ids[2],'get_payment_preferences',{}),false,'One account cannot change the payer preference');
+  for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await accessibility(page,`payment approval ${scheme}`);await shot(page,`payment-preference-${scheme}`);}
+  await sender.getByRole('button',{name:'Refresh',exact:true}).click();await nav(sender,'Balances').click();
+  await sender.getByRole('button',{name:'Record a repayment',exact:true}).click();
+  await sender.getByLabel('Paid to').selectOption(ids[0]);await sender.getByLabel('Amount · AUD').fill('39.60');
+  await sender.getByText('Alex requires approval. This repayment will wait for their confirmation before balances change.',{exact:true}).waitFor();
+  await sender.getByRole('button',{name:'Record repayment',exact:true}).click();await sender.getByRole('heading',{name:'Balances',exact:true}).waitFor();
+  let state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments[0].status,'pending');assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),-3960);
+  await requireApproval.uncheck();await page.getByRole('button',{name:'Save payment preference',exact:true}).click();
+  await page.getByText('Payment preference saved.',{exact:true}).waitFor();
+  state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});assert.equal(state.payments[0].status,'pending');
+  await page.getByRole('button',{name:'Pact home',exact:true}).click();await nav(page,'Balances').click();await page.getByRole('button',{name:'Confirm received',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Confirm received',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+  state=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  assert.equal(state.payments[0].confirmation_method,'recipient');assert.equal(Number(state.balances.find(b=>b.user_id===ids[2]).cents),0);
+  await done(f);
+ });
+ await test('Payment preference response loss preserves the chosen value for safe retry without affecting the ledger',async()=>{
+  const f=await fixture(),{page}=f;await openAccount(page);
+  const before=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  const checkbox=page.getByRole('checkbox',{name:'Require my approval for repayments to me',exact:true});
+  await checkbox.check();f.state.abortOnce='set_payment_preferences';
+  await page.getByRole('button',{name:'Save payment preference',exact:true}).click();
+  await page.getByRole('alert').waitFor();assert.equal(await checkbox.isChecked(),true);
+  await page.getByRole('button',{name:'Save payment preference',exact:true}).click();
+  await page.getByText('Payment preference saved.',{exact:true}).waitFor();
+  const calls=f.state.calls.filter(c=>c.name==='set_payment_preferences');assert.equal(calls.length,2);assert.deepEqual(calls[0].args,calls[1].args);
+  const after=await f.call(ids[0],'get_household_state',{p_group:f.home,p_limit:50});
+  for(const key of ['balances','expenses','payments','shares'])assert.deepEqual(after[key],before[key]);
+  await done(f);
+ });
  await test('Profile names trim and survive reload; members see refreshed names without email or ledger changes',async()=>{
   const f=await fixture(),{page}=f,other=await f.createPage(ids[1]);
   await other.page.getByRole('button',{name:'People & trips',exact:true}).click();
@@ -208,7 +373,7 @@ try{
   assert.equal(after.members.find(m=>m.id===ids[0]).name,'Alex Example');
   assert.deepEqual(after.members.map(({id,role,status})=>({id,role,status})),before.members.map(({id,role,status})=>({id,role,status})));
   for(const key of ['balances','expenses','shares','payments'])assert.deepEqual(after[key],before[key],`Profile update changed ${key}`);
-  for(const member of after.members)assert.deepEqual(Object.keys(member).sort(),['id','name','role','status']);
+  for(const member of after.members)assert.deepEqual(Object.keys(member).sort(),['id','name','require_payment_approval','role','status']);
   await page.reload();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await expectProfileName(page,'Alex Example');
   assert.ok(f.state.calls.filter(c=>c.name==='get_profile').every(c=>c.id===c.actor),'Account reads must target the signed-in profile');
   await done(f);
