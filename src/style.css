@@ -13,3 +13,19 @@
 .automatic-share input::placeholder{color:var(--ink);opacity:1}
 .auto-share-label{display:block;margin-top:4px;text-align:right;font-size:.6875rem;font-weight:600;color:var(--accent)}
 @media(max-width:360px){.split-row:has(.exact-input){flex-wrap:wrap;padding-bottom:10px}.split-row:has(.exact-input) .person-toggle{flex-basis:100%;padding-bottom:2px}.split-row .exact-input{width:140px;margin-left:auto;padding:0}}
+
+/* Repayment controls keep both directions and receipt checks clear on small screens. */
+.repayment-actions{display:grid;gap:10px}
+.repayment-direction{margin-bottom:12px}
+.repayment-check{margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--page)}
+.repayment-check h2{margin-bottom:6px}
+.repayment-check>.helper{margin-top:0}
+.repayment-confirmation{align-items:flex-start;padding:16px 0;margin:8px 0 16px;border:0;line-height:1.5;font-size:.875rem}
+.repayment-confirmation input{margin-top:1px}
+.repayment-check>.repayment-confirmation{margin-bottom:0;padding-bottom:0}
+@media(max-width:400px){.repayment-check{padding:14px}.repayment-check .payment-card{padding:14px}.repayment-direction button{padding:10px 8px}.repayment-check .amount-row{gap:8px}}
+
+.payment-preference-toggle{align-items:flex-start;padding:14px 0;border:0;line-height:1.5;font-size:.875rem}
+.payment-preference-toggle input{margin-top:1px}
+.repayment-policy>strong{font-size:.875rem}
+.repayment-policy>.helper{margin-bottom:0}
