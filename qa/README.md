@@ -12,14 +12,16 @@ Playwright and axe-core are pinned development dependencies. On Linux, install b
 
 The harness starts a local Vite server and headless Chromium. It overrides all frontend connection values with a fictional project, creates disposable PGlite databases, applies the actual migrations and intercepts external HTTP and WebSocket traffic. Google identities, households, shopping and transactions are synthetic. No real account, invitation or hosted database is used.
 
-The twenty-three browser scenarios retain the ten original checks for navigation, responsive layouts, light/dark accessibility scans, expense splits and drafts, uncertain request recovery, invitation handoff, shopping purchases, repayment confirmation, corrections/refunds, trips and membership changes. Two custom-split scenarios cover automatic remainders, manually entered zero amounts, overruns and invalid decimals, deriving the total from entered shares, selection and mode changes, background refresh, saved drafts and Review → Edit. The uncertain-save scenario also verifies that retrying an automatically calculated custom split preserves its exact original request.
+The twenty-four browser scenarios retain the ten original checks for navigation, responsive layouts, light/dark accessibility scans, expense splits and drafts, uncertain request recovery, invitation handoff, shopping purchases, repayment confirmation, corrections/refunds, trips and membership changes. Two custom-split scenarios cover automatic remainders, manually entered zero amounts, overruns and invalid decimals, deriving the total from entered shares, selection and mode changes, background refresh, saved drafts and Review → Edit. The uncertain-save scenario also verifies that retrying an automatically calculated custom split preserves its exact original request.
+
+The main-screen appearance matrix checks both themes at 320, 390, 768 and 1280 pixels, including horizontal overflow, one active navigation item, keyboard navigation and bottom content remaining reachable above the floating navigation. Axe scans run at the smallest and desktop widths, and on the populated shopping list while hovering Mark bought in both themes. A separate balance scenario verifies the written owed, owing and settled labels and complete, unclipped amounts in both themes. A long household name with twelve members and a two-member trip verify compact headers at 320 pixels. The large-balance check uses a seven-digit amount at 320 pixels. The refund flow checks its dialog at a short 568-pixel viewport and verifies keyboard access to the submit action.
 
 Four profile and appearance scenarios cover:
 
 - Editing and trimming a display name, persistence after reload, another member seeing the new name after refresh, unchanged roles and ledger records, and no member-email exposure.
 - Invalid input, rejected saves and expired-auth responses retaining the entered name for retry.
 - Profile editing and appearance preferences before a person belongs to any household.
-- System, Light and Dark preferences across reloads and operating-system changes, with long-name layout and axe checks at 320, 390 and 768 pixels.
+- System, Light and Dark preferences across reloads and operating-system changes, with long-name layout and axe checks at 320, 390, 768 and 1280 pixels.
 
 Four recipient-repayment scenarios cover:
 
