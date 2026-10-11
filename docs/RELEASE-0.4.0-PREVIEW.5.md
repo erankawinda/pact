@@ -1,6 +1,6 @@
 # Private photos and transaction notifications — 0.4.0-preview.5
 
-Prepared **11 October 2026** as a **staging candidate**. The hosted staging backend has been validated. **Production has not been updated, and delivery to a real phone remains unverified.** The separate [preview.4 appearance package](RELEASE-0.4.0-PREVIEW.4.md) remains ready for its frontend-only upload.
+Prepared **11 October 2026** as a **staging candidate**. The hosted staging backend was validated. Photos subsequently reached production in [preview.6](RELEASE-0.4.0-PREVIEW.6.md); transaction notifications remain in staging and delivery to a real phone remains unverified. The evidence below records this candidate's original validation.
 
 ## What changes
 

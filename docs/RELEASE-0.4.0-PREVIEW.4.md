@@ -1,6 +1,6 @@
 # Minimal appearance update — 0.4.0-preview.4
 
-Prepared **11 October 2026**. **Ready for manual upload; this candidate is not deployed yet.** The existing preview.3 frontend and its profile/repayment function definitions were verified in production during this preparation.
+Prepared and subsequently verified in production **11 October 2026**. This appearance release has since been superseded by [preview.6](RELEASE-0.4.0-PREVIEW.6.md). The existing preview.3 frontend and its profile/repayment function definitions were verified during the original preparation.
 
 ## What changes
 

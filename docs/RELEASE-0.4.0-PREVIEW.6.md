@@ -1,6 +1,6 @@
 # Profile refresh and photo rollout — 0.4.0-preview.6
 
-Prepared **11 October 2026**. The production photo backend is installed and checked. **The frontend package awaits upload**, so production account upload acceptance is still pending. Transaction notifications remain disabled in this production build.
+Released and verified **11 October 2026**. All nine served frontend files match the prepared package, and the production photo backend is installed and checked. A real production-account upload is still unverified. Transaction notifications remain disabled in this production build.
 
 ## What changes
 
@@ -22,10 +22,10 @@ After upload, reload Pact, verify Account shows **0.4.0-preview.6**, and use **C
 
 - Public privacy gate, 61 Node tests, TypeScript and configured production build passed. The existing bundle-size advisory remains.
 - Eight photo/account browser scenarios passed, including the actual file chooser, preview before save, interrupted-request recovery, delete-before-replace, stale versions and account switching. Layout/accessibility checks covered 320/390/768 widths in light and dark themes.
-- The 24 existing scenarios were covered across the main run and a focused account rerun after a development-server reload interrupted the final appearance scenario.
+- All 24 existing scenarios subsequently passed in [GitHub Actions](https://github.com/erankawinda/pact/actions/runs/38130776233), together with the eight photo and nine notification scenarios, both Edge checks and seven worker runtime tests.
 - Nine notification browser scenarios passed after moving settings into the new account layout. Native delivery remains simulated.
 - Fresh staging validation with gateway JWT checking passed for an ES256 synthetic Auth session: status/read 200, upload 201, deletion 200 and read-after-delete 404. All temporary account, session, lifecycle and Storage records were removed.
 
-These checks extend preview.5's hosted co-member/outsider, revoked-membership, metadata and body-limit coverage. They do not prove a particular phone's HEIC decoding, native accessibility or simultaneous database races. Real production-account photo upload remains pending until the frontend is deployed. Real phone notification delivery is not part of this release and remains unverified.
+These checks extend preview.5's hosted co-member/outsider, revoked-membership, metadata and body-limit coverage. They do not prove a particular phone's HEIC decoding, native accessibility or simultaneous database races. Real production-account photo upload remains unverified after deployment. Real phone notification delivery is not part of this release and remains unverified.
 
 An interrupted private upload can remain until the owner returns or maintenance removes it through the supported lifecycle and Storage API. See the [photo service guide](../supabase/functions/profile-photo/README.md) for recovery and cleanup.

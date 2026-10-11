@@ -1,23 +1,25 @@
 # Project status
 
-Pact **0.4.0-preview.3** was verified in production on **11 October 2026**: the served JavaScript matched the prepared release bundle and 15 profile, household-state and repayment function bodies matched the reviewed source. This is a dated verification, not a live service-status report. The read-only preflight did not read or change household records.
+Pact **0.4.0-preview.6** was verified in production on **11 October 2026**. All nine served static files matched the reviewed release package. The photo backend was installed and checked before that upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
 
 ## Current profile release
 
-**0.4.0-preview.6**, prepared **11 October 2026**, is ready for production frontend upload. The production photo migration and authenticated Edge Function are installed. The currently served frontend was verified as **preview.4** before this update; it has no photo-upload controls. Preview.6 enables photos and keeps transaction notifications disabled in the production build.
+**0.4.0-preview.6** is the current production frontend. Photos are enabled; transaction notifications remain disabled. The deployment contains the reviewed account redesign and photo controls. A real production-account upload remains unverified.
 
 The account page now groups a larger avatar, display name and actual membership role in one identity card, followed by appearance/payment settings and private sign-in details. Photo controls support choosing a file, local preview, saving, deletion before replacement and recoverable errors. This interface preserves the existing permissions, ledger operations and photo-processing limits.
 
 | Check | Evidence |
 |---|---|
 | Source validation | Public privacy gate, 61 Node tests, TypeScript and configured production build passed |
-| Existing browser coverage | 24 scenarios covered across the main run and a focused account rerun after a development-server reload interrupted the final appearance scenario |
+| Continuous integration | [Preview.6 CI passed](https://github.com/erankawinda/pact/actions/runs/38130776233): all 41 browser scenarios, both Edge entrypoint checks and 7 notification-worker tests |
+| Production frontend | All 9 served files matched the prepared preview.6 package; photo controls are included |
+| Existing browser coverage | All 24 scenarios passed in GitHub Actions on the preview.6 source |
 | Notification browser suite | 9 scenarios passed with simulated native APIs; this does not verify delivery to a real phone |
 | Photo/account browser suite | 8 scenarios passed, including the actual file chooser, 320/390/768 layouts in both themes, accessibility, status retry and account-switch safety |
 | Hosted staging photo service | Gateway JWT verification enabled; ES256 authenticated status/read 200, upload 201, delete 200, subsequent read 404; synthetic account and Storage objects cleaned up |
 | Production backend | Five photo function bodies match staging; private bucket capped at 256 KiB; client table/RPC access denied; anonymous and invalid-token requests return 401 |
 
-The production photo service now requires both gateway JWT verification and the function's own trusted Auth check. A real production account's upload is not yet verified: it requires the new frontend deployment. Private-table RLS notices reflect intentionally denied browser access. The pre-existing [leaked-password-protection advisory](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) remains; this Google-sign-in update did not introduce it. See [preview.6 release notes](RELEASE-0.4.0-PREVIEW.6.md).
+The production photo service now requires both gateway JWT verification and the function's own trusted Auth check. A real production account's upload has not yet been exercised; deployment verification is distinct from that account-level check. Private-table RLS notices reflect intentionally denied browser access. The pre-existing [leaked-password-protection advisory](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) remains; this Google-sign-in update did not introduce it. See [preview.6 release notes](RELEASE-0.4.0-PREVIEW.6.md).
 
 ## Transaction notifications remain in staging
 
