@@ -62,7 +62,7 @@ VITE_NOTIFICATIONS_ENABLED=false
 VITE_WEB_PUSH_PUBLIC_KEY=
 ```
 
-For an environment with a validated photo service, set `VITE_PROFILE_PHOTOS_ENABLED=true`. For notifications, also set `VITE_NOTIFICATIONS_ENABLED=true` and supply that environment's VAPID **public** key. These are build-time settings; changing them requires rebuilding the static site. See the [preview.5 upgrade steps](#upgrade-to-040-preview5).
+For an environment with a validated photo service, set `VITE_PROFILE_PHOTOS_ENABLED=true`. For notifications, also set `VITE_NOTIFICATIONS_ENABLED=true` and supply that environment's VAPID **public** key. These are build-time settings; changing them requires rebuilding the static site. See the [photo-only upgrade](#upgrade-to-040-preview6-with-photos-only) or [notification setup](#upgrade-to-040-preview5).
 
 Run with the same origin used in your Google and Supabase settings:
 
@@ -127,12 +127,12 @@ For a frontend rollback, retain the photo schema and private objects. The earlie
 
 ## Upgrade to 0.4.0-preview.5
 
-This candidate includes preview.4's appearance and adds private photos and optional phone notifications. Its staging backend passed the checks in the [release notes](RELEASE-0.4.0-PREVIEW.5.md); production is unchanged and real phone delivery remains unverified. A frontend upload alone cannot activate these features.
+This candidate includes preview.4's appearance and adds private photos and optional phone notifications. Its staging backend passed the checks in the [release notes](RELEASE-0.4.0-PREVIEW.5.md); its notification setup remains outside the photo-only production rollout and real phone delivery remains unverified. A frontend upload alone cannot activate these features.
 
 ### Prepare the backend
 
 1. On a staging backend with the first six migrations installed, apply migrations 7–9 above in order. Keep existing profiles, membership, transaction amounts and payment preferences intact. Reconcile migration history before using CLI `db push` on a manually configured project.
-2. Deploy `profile-photo` using its [service guide](../supabase/functions/profile-photo/README.md). Its own Auth validation must run on every request, including when the gateway's legacy JWT check is disabled for an asymmetric-signing-key project. It reads the hosted `SUPABASE_URL` and the `default` entry of `SUPABASE_SECRET_KEYS`, with legacy `SUPABASE_SERVICE_ROLE_KEY` fallback. None of those server keys belongs in the browser.
+2. Deploy `profile-photo` using its [service guide](../supabase/functions/profile-photo/README.md). Keep gateway `verify_jwt=true` and its own Auth validation enabled on every request; current asymmetric user access tokens are supported. It reads the hosted `SUPABASE_URL` and the `default` entry of `SUPABASE_SECRET_KEYS`, with legacy `SUPABASE_SERVICE_ROLE_KEY` fallback. None of those server keys belongs in the browser.
 3. Check the private `profile-photos` bucket, its size/type limits and all applicable `storage.objects` policies. No broad existing policy may grant browser access to this bucket. Validate actual processing, upload, co-member reads, outsider denial, metadata removal, replacement refusal and Storage deletion.
 4. Deploy `dispatch-notifications` and configure its [server secrets and Vault/Cron schedule](../supabase/functions/dispatch-notifications/README.md). Its custom scheduler-token check must remain enabled. A browser user token or public publishable key is not permission to dispatch notifications.
 
