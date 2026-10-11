@@ -2,35 +2,33 @@
 
 Pact **0.4.0-preview.3** was verified in production on **11 October 2026**: the served JavaScript matched the prepared release bundle and 15 profile, household-state and repayment function bodies matched the reviewed source. This is a dated verification, not a live service-status report. The read-only preflight did not read or change household records.
 
-## Next candidate: private photos and transaction notifications
+## Current profile release
 
-**0.4.0-preview.5**, prepared **11 October 2026**, is a **staging candidate**. Hosted backend checks passed; production has not been updated. Real phone notification delivery remains unverified.
+**0.4.0-preview.6**, prepared **11 October 2026**, is ready for production frontend upload. The production photo migration and authenticated Edge Function are installed. The currently served frontend was verified as **preview.4** before this update; it has no photo-upload controls. Preview.6 enables photos and keeps transaction notifications disabled in the production build.
 
-| Candidate check | Evidence |
+The account page now groups a larger avatar, display name and actual membership role in one identity card, followed by appearance/payment settings and private sign-in details. Photo controls support choosing a file, local preview, saving, deletion before replacement and recoverable errors. This interface preserves the existing permissions, ledger operations and photo-processing limits.
+
+| Check | Evidence |
 |---|---|
-| Node suite | All 57 tests passed: 30 existing, 9 notification, 6 photo, 4 image-header and 8 service-worker tests |
-| Isolated browser suites | All 39 scenarios passed: 24 existing, 6 photo and 9 notification scenarios |
-| Notification worker | Deno typecheck and 7 synthetic-provider runtime tests passed |
-| Hosted staging | 13 check groups passed, including actual image processing/Storage lifecycle, co-member and outsider access, revoked membership, metadata/body limits and deletion cleanup |
-| Dispatcher and scheduler | Unauthorized invocation returned 401; authorized empty-queue invocation and three scheduled calls returned 200 |
-| Backend source parity | All 30 reviewed function bodies matched final source |
+| Source validation | Public privacy gate, 61 Node tests, TypeScript and configured production build passed |
+| Existing browser coverage | 24 scenarios covered across the main run and a focused account rerun after a development-server reload interrupted the final appearance scenario |
+| Notification browser suite | 9 scenarios passed with simulated native APIs; this does not verify delivery to a real phone |
+| Photo/account browser suite | 8 scenarios passed, including the actual file chooser, 320/390/768 layouts in both themes, accessibility, status retry and account-switch safety |
+| Hosted staging photo service | Gateway JWT verification enabled; ES256 authenticated status/read 200, upload 201, delete 200, subsequent read 404; synthetic account and Storage objects cleaned up |
+| Production backend | Five photo function bodies match staging; private bucket capped at 256 KiB; client table/RPC access denied; anonymous and invalid-token requests return 401 |
 
-The candidate adds device opt-in notifications with private generic text, category and tone choices, and session/membership checks. It adds private profile photos with preview, metadata removal and deletion before replacement. See [preview.5 release notes](RELEASE-0.4.0-PREVIEW.5.md) for the completed checks and remaining deployment steps.
+The production photo service now requires both gateway JWT verification and the function's own trusted Auth check. A real production account's upload is not yet verified: it requires the new frontend deployment. Private-table RLS notices reflect intentionally denied browser access. The pre-existing [leaked-password-protection advisory](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) remains; this Google-sign-in update did not introduce it. See [preview.6 release notes](RELEASE-0.4.0-PREVIEW.6.md).
 
-The staging advisor's private-table RLS notices are expected because client access is intentionally denied. Its existing password-protection warning was not introduced by this Google-sign-in update. These observations do not replace access testing.
+## Transaction notifications remain in staging
 
-## Appearance package ready for upload
-
-**0.4.0-preview.4** remains **ready for manual upload and not deployed yet**. It introduces warm-white, charcoal and lime colours, an unboxed balance, aligned lists, a floating navigation bar and account initials. It passed 30 Node/database tests and 24 isolated browser scenarios, including both themes, small screens, large/zero balances and automated accessibility checks. TypeScript and production builds passed; configured builds retain the bundle-size advisory.
-
-This separate package needs **no new SQL** on a preview.3 backend. Its production preflight matched the prepared preview.3 frontend and 15 existing profile/repayment function bodies. See [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md). Preview.5 includes that appearance but requires its additional migrations and server setup.
+[0.4.0-preview.5](RELEASE-0.4.0-PREVIEW.5.md) introduced the photo service and optional transaction notifications. Its earlier hosted staging validation passed 13 check groups, 30 function-body comparisons, dispatcher authorization and scheduled invocations. The dispatcher also passed seven synthetic-provider runtime tests. These checks do not prove delivery to a real phone. Production has no notification dispatcher or schedule installed by this release.
 
 ## Core features
 
 - Home, Shopping, Expenses and Balances navigation.
 - Google sign-in, personal invitations, household membership and selected trip participants.
 - Equal/custom expense splits, automatic remaining shares, corrections, voids and refunds.
-- Own-display-name editing, initials avatars and browser-specific appearance preferences.
+- Own-display-name editing, initials/private photo avatars and browser-specific appearance preferences.
 - Shopping requests, claims, partial purchases and purchase-linked expenses.
 - Repayment recording by sender or recipient, automatic settlement by default, personal incoming approval preferences and reversal history.
 - Draft/save recovery, activity history and CSV/JSON exports.

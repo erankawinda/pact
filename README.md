@@ -8,9 +8,9 @@ The idea is simple: one place to record what happened, choose who shares the cos
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with light and dark themes and a home-screen web app icon.
 
-The [repayment update, 0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), is the latest verified production release, checked on **11 October 2026**. It adds direct receipt recording, automatic settlement by default and each recipient's own approval preference.
+The [preview.4 appearance release](docs/RELEASE-0.4.0-PREVIEW.4.md) was verified in production on **11 October 2026**. It includes [recipient-recorded repayments and personal approval preferences](docs/RELEASE-0.4.0-PREVIEW.3.md).
 
-The [preview.4 appearance package](docs/RELEASE-0.4.0-PREVIEW.4.md) is ready for manual upload with no new SQL. The next candidate, [0.4.0-preview.5](docs/RELEASE-0.4.0-PREVIEW.5.md), includes that appearance plus private profile photos and optional transaction notifications. Its hosted staging backend is validated; **production is unchanged and real phone notification delivery remains unverified**.
+[0.4.0-preview.6](docs/RELEASE-0.4.0-PREVIEW.6.md) adds a redesigned account page and enables private profile photos in the prepared production build. The photo backend is installed and checked; **the new frontend awaits upload**. Transaction notifications remain a separate staging feature and real phone delivery remains unverified.
 
 ## What it does
 

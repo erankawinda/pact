@@ -7,11 +7,10 @@ The original photograph is never uploaded by Pact.
 ## Runtime and deployment
 
 - Apply `20261011083917_private_profile_photos.sql` before deploying the function.
-- Deploy this directory with its pinned `deno.json` imports.
+- Deploy this directory with its pinned `deno.json` imports and `deno.lock`.
+- Keep gateway `verify_jwt=true`. It accepts current asymmetric user access tokens.
 - The function validates every caller using Auth `getUser(token)`, a verified email,
   and the trusted Google provider list. It does not trust decoded JWT claims alone.
-- Projects using asymmetric signing keys can disable the gateway's legacy JWT check
-  for this function only. The function's own Auth validation must remain enabled.
 - `SUPABASE_URL` and the default key in `SUPABASE_SECRET_KEYS` are read only on the
   server. Older projects may use `SUPABASE_SERVICE_ROLE_KEY` instead.
 - Keep the frontend feature flag disabled until hosted Auth, Storage and JPEG tests

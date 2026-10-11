@@ -11,7 +11,7 @@ npm ci
 npm run check
 ```
 
-`check` runs the Node test suite, TypeScript validation and a Vite build. These checks use disposable local database fixtures and do not require a hosted Supabase project. A successful build without environment variables does not create a connected app.
+`check` runs the public privacy gate, Node test suite, TypeScript validation and a Vite build. These checks use disposable local database fixtures and do not require a hosted Supabase project. A successful build without environment variables does not create a connected app.
 
 Run `npm run test:browser`, `npm run test:privacy-browser` and `npm run test:notifications-browser` for the three isolated browser/accessibility suites. See [qa/README.md](../qa/README.md) for Chromium installation, coverage and generated artifacts. The notification worker also has [separate Deno checks](../supabase/functions/dispatch-notifications/README.md#deploy-to-staging-first).
 
@@ -106,6 +106,24 @@ Keep simulated transactions in a separate development environment. A short check
 Optional physical-device checks cover decimal keyboards, enlarged text, screen-reader navigation and Home Screen installation. Record which checks actually ran. A skipped check remains unverified, even when a release proceeds.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
+
+## Upgrade to 0.4.0-preview.6 with photos only
+
+The account redesign can run with photos enabled independently of notifications. On a backend with the existing six core/profile/repayment migrations, apply only `20261011083917_private_profile_photos.sql` if it is not already installed. Deploy `profile-photo` with its pinned `deno.json` and `deno.lock`, gateway `verify_jwt=true`, and the mandatory in-function Auth validation. The platform's server-only default secret is sufficient; photo uploads do not need VAPID keys, a dispatcher token, Vault or Cron.
+
+Validate authenticated status, upload, read and deletion in staging, plus anonymous denial, private bucket limits and service-only RPC grants. Then build the intended environment with:
+
+```dotenv
+VITE_PROFILE_PHOTOS_ENABLED=true
+VITE_NOTIFICATIONS_ENABLED=false
+VITE_WEB_PUSH_PUBLIC_KEY=
+```
+
+Keep the environment's normal public connection settings outside Git. Upload the complete generated static build, including `_headers` (which permits authenticated photo blob images), to the intended production deployment. Check Account shows **0.4.0-preview.6** and offers **Choose a photo**. Choose a photo, inspect the square preview and save it. An existing saved photo must be removed before choosing a replacement. Check errors before retrying an uncertain upload.
+
+Do not run a blanket migration push for this selective upgrade: the notification migration precedes the photo migration and has additional configuration requirements. Track the exact applied migration in the deployment record. Existing notification installations remain additive; this photo-only build does not configure or enable production delivery. See [release notes](RELEASE-0.4.0-PREVIEW.6.md) for the dated verification and remaining acceptance scope.
+
+For a frontend rollback, retain the photo schema and private objects. The earlier preview.4 frontend hides the photo controls without deleting stored images or ledger records.
 
 ## Upgrade to 0.4.0-preview.5
 
