@@ -1,23 +1,21 @@
 # Project status
 
-Pact **0.4.0-preview.2** was deployed on **6 October 2026**. It is a household pilot combining custom-share auto-fill, editable display names and System/Light/Dark appearance with the existing shared-house workflows. This is a dated release milestone, not a live service-status report.
+Pact **0.4.0-preview.3** was verified in production on **11 October 2026**: the served JavaScript matched the prepared release bundle and 15 profile, household-state and repayment function bodies matched the reviewed source. This is a dated verification, not a live service-status report. The read-only preflight did not read or change household records.
 
-## Next candidate: repayments and personal approval preferences
+## Next candidate: minimal appearance
 
-**0.4.0-preview.3**, prepared **11 October 2026**, is **not deployed to production yet**. Payments settle automatically by default; each recipient can enable approval in Account for future incoming records across their households and trips. Existing pending records still require review. The recipient can enter a transfer that the sender forgot to record, acknowledge receipt and update balances immediately. Pending sender reports must be reconciled first; matching amount/date records require an explicit separate-payment acknowledgement. Recorder attribution, activity and reversal preserve the audit trail.
+**0.4.0-preview.4**, prepared **11 October 2026**, is **ready for manual upload and not deployed yet**. It adopts warm-white, charcoal and lime colours, an unboxed balance, aligned divider lists, a floating navigation bar, account initials and native appearance choices. The existing payment approval, reversal and recovery behavior remains. There is no new database migration.
 
 | Candidate check | Evidence |
 |---|---|
-| Local Node/database tests | All 30 passed, including migration backfill, old request replay, balances, duplicate guards and permissions |
-| TypeScript and Vite build | Passed |
-| Isolated browser suite | All 23 scenarios passed, including recipient recording, pending reconciliation, duplicate handling and lost-response recovery |
-| Visual review | New recipient form inspected in light/dark appearance; pending-record screen inspected |
-| Hosted staging migration | Both migrations installed; all 11 combined check groups passed with synthetic fixtures rolled back |
-| Hosted staging advisors | No database security errors or warnings; existing INFO findings for RPC-only tables without direct-access policies remain |
+| Node/database suite | All 30 tests passed |
+| TypeScript and production builds | Passed; configured build retains the bundle-size advisory |
+| Isolated browser suite | All 24 scenarios passed, including main screens in both themes at 320/390/768/1280 widths |
+| Layout and access checks | Large and zero balances, long names, 12-person household, two-person trip, keyboard navigation, footer clearance, short dialogs and automated accessibility scans |
+| Visual review | Synthetic app screenshots inspected; README gallery refreshed |
+| Production preflight | Preview.3 public frontend and profile/repayment function bodies match the reviewed source; no new SQL needed |
 
-The Auth advisor separately warns that leaked-password protection is disabled. Pact's operations require a verified Google identity; the warning is not a finding introduced by this migration. Account owners can review [Supabase's password-protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
-
-See the [candidate release notes](RELEASE-0.4.0-PREVIEW.3.md) for compatibility and deployment order. Test results above do not establish concurrency across independent database sessions.
+See [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md) for deployment order and validation limits. The previous repayment release's 11 hosted staging check groups remain recorded in [preview.3 notes](RELEASE-0.4.0-PREVIEW.3.md); the appearance release does not change their schema or functions.
 
 ## Implemented
 
@@ -26,7 +24,7 @@ See the [candidate release notes](RELEASE-0.4.0-PREVIEW.3.md) for compatibility 
 - Equal/custom expense splits, automatic remaining shares, corrections, voids and refunds.
 - Own-display-name editing, initials avatars and browser-specific appearance preferences.
 - Shopping requests, claims, partial purchases and purchase-linked expenses.
-- Repayment recording, recipient confirmation and reversal; direct recipient recording is included in the new candidate.
+- Repayment recording by sender or recipient, automatic settlement by default, personal incoming approval preferences and reversal history.
 - Draft/save recovery, activity history and CSV/JSON exports.
 
 ## Previous release verification: 0.4.0-preview.2

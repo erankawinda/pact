@@ -10,7 +10,9 @@ Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with l
 
 The [auto-fill, profile and appearance update](docs/RELEASE-0.4-PREVIEW.md) was deployed on **6 October 2026** as **0.4.0-preview.2**. It combines the custom-share improvements from 0.3.1 with basic profiles and device appearance preferences.
 
-The next candidate, [0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), adds direct receipt recording, automatic settlement by default and each recipient’s own approval preference. It is **not deployed to production yet**.
+The [repayment update, 0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), is deployed and was verified on **11 October 2026**. It adds direct receipt recording, automatic settlement by default and each recipient’s own approval preference.
+
+The next candidate, [0.4.0-preview.4](docs/RELEASE-0.4.0-PREVIEW.4.md), brings a minimal warm-white, charcoal and lime appearance to the working app. It is **prepared for upload, not deployed yet**.
 
 ## What it does
 

@@ -94,13 +94,21 @@ Optional physical-device checks cover decimal keyboards, enlarged text, screen-r
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
 
+## Upgrade to 0.4.0-preview.4
+
+This is an appearance update on top of preview.3. There is **no new database migration**. If the target backend already has all six migrations, build the configured frontend and upload its static assets. Do not rerun the earlier repayment SQL. If upgrading from preview.2, install the two repayment migrations described below first.
+
+The candidate adopts warm-white, charcoal and lime surfaces, a larger unboxed balance, clean lists, an initials account control, a floating navigation bar and System/Light/Dark appearance controls. All money, membership and recovery operations keep their existing database interfaces. Review [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md) before publishing.
+
+After deployment, reload open tabs and check Account shows **0.4.0-preview.4**. Confirm the household, navigation, approval setting and light/dark appearance load. An existing Home Screen shortcut may keep its old icon until the browser refreshes its manifest; this does not require recreating the account. A frontend rollback to preview.3 needs no database rollback.
+
 ## Upgrade to 0.4.0-preview.3
 
 From a backend already running the first four migrations, apply the fifth and sixth migrations in order. Validate them in staging before production: existing payment rows must retain their amounts, status and participants, with `recorded_by` backfilled to the sender. Check both recording directions, pending reconciliation, exact duplicate handling, reversal, permissions and replay of a request created before the migration.
 
 Apply both validated migrations to the target backend **before publishing the new frontend**. Existing amounts, participants and statuses must stay unchanged; new preferences default to automatic settlement. Older clients retain sender recording, confirmation and request recovery, but their old explanatory text does not describe automatic settlement, so reload open clients after deployment; a new exact duplicate is now rejected, and the older form has no separate-payment override. A frontend rollback can leave the additive migration in place. Do not rerun older migrations or delete ledger records to roll back the interface.
 
-The candidate is not yet deployed to production. See [0.4.0-preview.3 release notes](RELEASE-0.4.0-PREVIEW.3.md) for current staging evidence and unfinished validation.
+The preview.3 frontend and repayment function definitions were verified in production on 11 October 2026. See [0.4.0-preview.3 release notes](RELEASE-0.4.0-PREVIEW.3.md) for the verification scope.
 
 ## Earlier upgrade from 0.3
 

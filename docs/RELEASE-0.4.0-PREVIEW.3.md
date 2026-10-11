@@ -1,6 +1,6 @@
 # Repayments and personal approval preferences — 0.4.0-preview.3
 
-Prepared **11 October 2026**. **Release candidate; not deployed to production yet.** The [previous 0.4.0-preview.2 milestone](RELEASE-0.4-PREVIEW.md) remains the recorded production release.
+Prepared **11 October 2026**. **Verified in production on 11 October 2026** during preparation of the following appearance release. The served JavaScript matched the prepared release bundle, and 15 profile, household-state and repayment function bodies matched the reviewed migrations. This read-only check did not create or modify household records.
 
 ## What changes
 
@@ -41,4 +41,4 @@ Both recording paths and payment actions share a transaction lock for the direct
 
 Local tests use synthetic records and PGlite, whose queries are serialised. They cover both recording orderings but do not prove behaviour across concurrent PostgreSQL connections, real multi-client Realtime delivery or physical-device accessibility. No new independent two-account or two-phone acceptance is claimed.
 
-Production migration and frontend deployment are not performed by this release preparation. Apply both new migrations, then immediately upload the configured frontend. New hosted Google-account/device acceptance has not been run. Configured bundles, environment identifiers, credentials, invitation links and real household records remain outside this public repository.
+The originally prepared upload has since been installed. Do not reapply those migrations to an already upgraded backend. A new installation still needs all six migrations in order. New hosted Google-account/device acceptance has not been run. Configured bundles, environment identifiers, credentials, invitation links and real household records remain outside this public repository.
