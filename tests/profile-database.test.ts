@@ -13,6 +13,7 @@ test('display-name changes validate Unicode and are confined to the verified cal
       raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;`);
+ await db.exec(await readFile(new URL('./fixtures/platform.sql',import.meta.url),'utf8'));
   const migrations=new URL('../supabase/migrations/',import.meta.url);
   for(const file of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()){
     await db.exec(await readFile(new URL(file,migrations),'utf8'));

@@ -16,6 +16,7 @@ const host='http://127.0.0.1:4173',out='qa/artifacts/screenshots';mkdirSync(out,
 const ids=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];const names=['Alex','Blake','Casey','Devin'];const results=[];
 async function fixture({empty=false,signedIn=true,width=390,scheme='light',requireApproval=false,extraMembers=0}={}){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
+ await db.exec(readFileSync('tests/fixtures/platform.sql','utf8'));
  for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort())await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
  const members=[...ids.map((id,i)=>({id,name:names[i],email:`${names[i].toLowerCase()}@example.test`})),...Array.from({length:extraMembers},(_,i)=>({id:randomUUID(),name:`Example Housemate ${i+1}`,email:`extra${i+1}@example.test`}))];
  for(const member of members)await db.query("insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values($1,$2,now(),$3)",[member.id,member.email,JSON.stringify({full_name:member.name})]);
