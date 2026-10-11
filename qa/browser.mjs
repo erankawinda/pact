@@ -13,9 +13,11 @@ const axePath=process.env.PACT_AXE_PATH||fileURLToPath(import.meta.resolve('axe-
 const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureUrl),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only')},server:{host:'127.0.0.1',port:4173,strictPort:true}});await server.listen();
 const browser=await chromium.launch({...(process.env.PACT_CHROMIUM_PATH?{executablePath:process.env.PACT_CHROMIUM_PATH}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
 const host='http://127.0.0.1:4173',out='qa/artifacts/screenshots';mkdirSync(out,{recursive:true});
+const nameFilter=process.argv[2]?new RegExp(process.argv[2],'i'):null;
 const ids=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];const names=['Alex','Blake','Casey','Devin'];const results=[];
 async function fixture({empty=false,signedIn=true,width=390,scheme='light',requireApproval=false,extraMembers=0}={}){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
+ await db.exec(readFileSync('tests/fixtures/platform.sql','utf8'));
  for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort())await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
  const members=[...ids.map((id,i)=>({id,name:names[i],email:`${names[i].toLowerCase()}@example.test`})),...Array.from({length:extraMembers},(_,i)=>({id:randomUUID(),name:`Example Housemate ${i+1}`,email:`extra${i+1}@example.test`}))];
  for(const member of members)await db.query("insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values($1,$2,now(),$3)",[member.id,member.email,JSON.stringify({full_name:member.name})]);
@@ -61,7 +63,7 @@ async function fixture({empty=false,signedIn=true,width=390,scheme='light',requi
   if(state.rejectOnce===name){state.rejectOnce='';return respond({code:'23514',message:'The profile could not be saved. Please try again.'},400);}
   try{if(name==='create_invitation'&&state.delayInvite)await new Promise(r=>setTimeout(r,state.delayInvite));const value=await call(actor,name,args);if(state.abortOnce===name){state.abortOnce='';return route.abort('failed');}return respond(value);}catch(e){return respond({code:e.code??'P0001',message:e.message},400);}
  });
- const page=await context.newPage();page.on('pageerror',e=>state.errors.push(String(e)));page.setDefaultTimeout(7000);await page.goto(host);await page.getByRole('button',{name:signedIn?(empty?'Create a household':'Add expense'):'Continue with Google',exact:true}).waitFor();return {page,context};}
+ const page=await context.newPage();page.on('pageerror',e=>state.errors.push(String(e)));page.on('console',message=>{if(/Encountered two children with the same key|Each child in a list should have a unique/.test(message.text()))state.errors.push(message.text());});page.setDefaultTimeout(7000);await page.goto(host);await page.getByRole('button',{name:signedIn?(empty?'Create a household':'Add expense'):'Continue with Google',exact:true}).waitFor();return {page,context};}
  const first=await createPage();return {...first,state,db,call,home,trip,createPage,close:async()=>{for(const c of contexts)await c.close();await db.close();}};
 }
 const nav=(page,name)=>page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true});
@@ -98,7 +100,7 @@ async function shot(page,label){
   await page.screenshot({path:`${out}/${label}-preview.png`,fullPage:false,animations:'disabled'});
  }
 }
-async function test(name,run){const start=Date.now();try{await run();results.push({name,status:'passed',ms:Date.now()-start});console.log(`PASS ${name}`);}catch(e){console.error(`FAIL ${name}`,e);results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync('qa/artifacts/browser-results.json',JSON.stringify(results,null,2));}}
+async function test(name,run){if(nameFilter&&!nameFilter.test(name))return;const start=Date.now();try{await run();results.push({name,status:'passed',ms:Date.now()-start});console.log(`PASS ${name}`);}catch(e){console.error(`FAIL ${name}`,e);results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync(nameFilter?'qa/artifacts/browser-focused-results.json':'qa/artifacts/browser-results.json',JSON.stringify(results,null,2));}}
 async function addExpense(page,{amount='10.01',name='Shared snack',people=['Blake','Casey']}={}){await page.getByRole('button',{name:'Add expense',exact:true}).click();await page.getByLabel('Amount · AUD').fill(amount);await page.getByLabel('What was it for?').fill(name);for(const who of people)await page.getByRole('checkbox',{name:who==='Alex'?'Alex You':who,exact:true}).check();}
 async function openAccount(page){await page.getByRole('button',{name:'Account',exact:true}).click();await page.getByRole('heading',{name:'Your account',exact:true}).waitFor();await page.getByLabel('Display name',{exact:true}).waitFor();await page.getByText('Loading your profile…',{exact:true}).waitFor({state:'hidden'});}
 async function expectProfileName(page,value){const input=await page.getByLabel('Display name',{exact:true}).elementHandle();await page.waitForFunction(({input,value})=>input.value===value,{input,value});}
@@ -518,5 +520,6 @@ try{
   assert.doesNotMatch(await page.locator('main').innerText(),/@example\.test/);
   await page.setViewportSize({width:390,height:844});await shot(page,'members-long-name');await done(f);
  });
- console.log('All local browser scenarios passed.');
+ if(nameFilter)assert.ok(results.length,'No browser scenario matched the supplied name filter');
+ console.log(nameFilter?'All selected local browser scenarios passed.':'All local browser scenarios passed.');
 }finally{await browser.close();await server.close();}

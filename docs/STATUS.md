@@ -1,28 +1,36 @@
 # Project status
 
-Pact **0.4.0-preview.3** was verified in production on **11 October 2026**: the served JavaScript matched the prepared release bundle and 15 profile, household-state and repayment function bodies matched the reviewed source. This is a dated verification, not a live service-status report. The read-only preflight did not read or change household records.
+Pact **0.4.0-preview.6** was verified in production on **11 October 2026**. All nine served static files matched the reviewed release package. The photo backend was installed and checked before that upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
 
-## Next candidate: minimal appearance
+## Current profile release
 
-**0.4.0-preview.4**, prepared **11 October 2026**, is **ready for manual upload and not deployed yet**. It adopts warm-white, charcoal and lime colours, an unboxed balance, aligned divider lists, a floating navigation bar, account initials and native appearance choices. The existing payment approval, reversal and recovery behavior remains. There is no new database migration.
+**0.4.0-preview.6** is the current production frontend. Photos are enabled; transaction notifications remain disabled. The deployment contains the reviewed account redesign and photo controls. A real production-account upload remains unverified.
 
-| Candidate check | Evidence |
+The account page now groups a larger avatar, display name and actual membership role in one identity card, followed by appearance/payment settings and private sign-in details. Photo controls support choosing a file, local preview, saving, deletion before replacement and recoverable errors. This interface preserves the existing permissions, ledger operations and photo-processing limits.
+
+| Check | Evidence |
 |---|---|
-| Node/database suite | All 30 tests passed |
-| TypeScript and production builds | Passed; configured build retains the bundle-size advisory |
-| Isolated browser suite | All 24 scenarios passed, including main screens in both themes at 320/390/768/1280 widths |
-| Layout and access checks | Large and zero balances, long names, 12-person household, two-person trip, keyboard navigation, footer clearance, short dialogs and automated accessibility scans |
-| Visual review | Synthetic app screenshots inspected; README gallery refreshed |
-| Production preflight | Preview.3 public frontend and profile/repayment function bodies match the reviewed source; no new SQL needed |
+| Source validation | Public privacy gate, 61 Node tests, TypeScript and configured production build passed |
+| Continuous integration | [Preview.6 CI passed](https://github.com/erankawinda/pact/actions/runs/38130776233): all 41 browser scenarios, both Edge entrypoint checks and 7 notification-worker tests |
+| Production frontend | All 9 served files matched the prepared preview.6 package; photo controls are included |
+| Existing browser coverage | All 24 scenarios passed in GitHub Actions on the preview.6 source |
+| Notification browser suite | 9 scenarios passed with simulated native APIs; this does not verify delivery to a real phone |
+| Photo/account browser suite | 8 scenarios passed, including the actual file chooser, 320/390/768 layouts in both themes, accessibility, status retry and account-switch safety |
+| Hosted staging photo service | Gateway JWT verification enabled; ES256 authenticated status/read 200, upload 201, delete 200, subsequent read 404; synthetic account and Storage objects cleaned up |
+| Production backend | Five photo function bodies match staging; private bucket capped at 256 KiB; client table/RPC access denied; anonymous and invalid-token requests return 401 |
 
-See [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md) for deployment order and validation limits. The previous repayment release's 11 hosted staging check groups remain recorded in [preview.3 notes](RELEASE-0.4.0-PREVIEW.3.md); the appearance release does not change their schema or functions.
+The production photo service now requires both gateway JWT verification and the function's own trusted Auth check. A real production account's upload has not yet been exercised; deployment verification is distinct from that account-level check. Private-table RLS notices reflect intentionally denied browser access. The pre-existing [leaked-password-protection advisory](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) remains; this Google-sign-in update did not introduce it. See [preview.6 release notes](RELEASE-0.4.0-PREVIEW.6.md).
 
-## Implemented
+## Transaction notifications remain in staging
+
+[0.4.0-preview.5](RELEASE-0.4.0-PREVIEW.5.md) introduced the photo service and optional transaction notifications. Its earlier hosted staging validation passed 13 check groups, 30 function-body comparisons, dispatcher authorization and scheduled invocations. The dispatcher also passed seven synthetic-provider runtime tests. These checks do not prove delivery to a real phone. Production has no notification dispatcher or schedule installed by this release.
+
+## Core features
 
 - Home, Shopping, Expenses and Balances navigation.
 - Google sign-in, personal invitations, household membership and selected trip participants.
 - Equal/custom expense splits, automatic remaining shares, corrections, voids and refunds.
-- Own-display-name editing, initials avatars and browser-specific appearance preferences.
+- Own-display-name editing, initials/private photo avatars and browser-specific appearance preferences.
 - Shopping requests, claims, partial purchases and purchase-linked expenses.
 - Repayment recording by sender or recipient, automatic settlement by default, personal incoming approval preferences and reversal history.
 - Draft/save recovery, activity history and CSV/JSON exports.
@@ -49,6 +57,6 @@ Two-phone and independent two-account acceptance were **skipped for 0.4.0-previe
 
 PGlite serialises fixture queries, and the browser harness intercepts external traffic. These tests do not certify races across separate PostgreSQL connections, real multi-client Realtime delivery, native installation or screen-reader use. The hosted database and one-account Google checks extend that evidence without closing all of those gaps.
 
-Concurrency testing, broader device checks and a backup/restore rehearsal remain outstanding. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
+Real phone push acceptance, concurrent PostgreSQL sessions, broader device checks and a backup/restore rehearsal remain outstanding. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
 
 The app records repayments; it does not transfer money. It has no offline transaction queue. JSON export is a group snapshot, not a complete database/Auth/Storage backup. See [ROADMAP.md](ROADMAP.md) for the next work and [RELEASE-0.3.md](RELEASE-0.3.md) for the earlier milestone.

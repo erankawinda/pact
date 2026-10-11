@@ -14,6 +14,7 @@ async function fixture(t:TestContext,withMigration=true){
  await db.exec(`create role anon;create role authenticated;create schema auth;
  create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
+ await db.exec(await readFile(new URL('./fixtures/platform.sql',import.meta.url),'utf8'));
  for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort()){
   if(file>=migration&&!withMigration)continue;
   await db.exec(await readFile('supabase/migrations/'+file,'utf8'));

@@ -2,7 +2,8 @@ import {useEffect, useLayoutEffect, useRef, useState, type FormEvent} from 'reac
 import {fetchOwnProfile, reauthenticate, rpc, type Group, type Snapshot} from './api';
 import {authError, definitelyRejected, message} from './errors';
 import {normalizeDisplayName, readThemePreference, saveThemePreference, THEME_STORAGE_KEY, type ThemePreference} from './profile';
-import {Alert, Avatar, Icon, Loading, type IconName} from './ui';
+import {Alert, Icon, Loading, type IconName} from './ui';
+import {ProfilePhoto} from './ProfilePhoto';
 
 export type AppearancePreference = {
   preference: ThemePreference;
@@ -50,7 +51,7 @@ export function Appearance({appearance}: {appearance: AppearancePreference}) {
     {value: 'dark', label: 'Dark', icon: 'moon'},
   ];
   return <section className="card account-section" aria-labelledby="appearance-heading">
-    <h2 id="appearance-heading">Appearance</h2>
+    <div className="account-setting-heading"><span className="setting-symbol" aria-hidden="true"><Icon name="sun"/></span><div><h2 id="appearance-heading">Appearance</h2><p className="helper">A little more you.</p></div></div>
     <fieldset className="theme-segment" aria-describedby="appearance-help">
       <legend className="sr-only">Appearance</legend>
       {options.map(option => <label className="theme-choice" key={option.value}>
@@ -139,8 +140,8 @@ export function PaymentApproval({userId, online, onSaved}: {
   }
 
   return <section className="card account-section" aria-labelledby="payment-approval-heading">
-    <h2 id="payment-approval-heading">Payment approval</h2>
-    <p className="helper">Choose how repayments to you are settled across all your households and trips.</p>
+    <div className="account-setting-heading"><span className="setting-symbol" aria-hidden="true"><Icon name="balance"/></span><div><h2 id="payment-approval-heading">Payment approval</h2><p className="helper">Your money, your preference.</p></div></div>
+    <p className="helper">Choose how repayments to you settle across your households and trips.</p>
     {loading ? <Loading text="Loading your payment preference…"/> : loadError ? <Alert text={loadError}>
       <button disabled={!online} onClick={() => setAttempt(value => value + 1)}>Try loading payment preference again</button>
       {needsAuth && <button disabled={!online} onClick={signInAgain}>Sign in again</button>}
@@ -156,8 +157,9 @@ export function PaymentApproval({userId, online, onSaved}: {
   </section>;
 }
 
-export function Profile({userId, group, snapshot, online, onSaved}: {
+export function Profile({userId, initialName, group, snapshot, online, onSaved}: {
   userId: string;
+  initialName?: string;
   group?: Group;
   snapshot: Snapshot | null;
   online: boolean;
@@ -226,21 +228,27 @@ export function Profile({userId, group, snapshot, online, onSaved}: {
   }
 
   const membership = snapshot?.members.find(member => member.id === userId && member.status === 'active');
-  return <section className="card account-section" aria-labelledby="profile-heading">
-    <h2 id="profile-heading">Your profile</h2>
-    {loading ? <Loading text="Loading your profile…"/> : loadError ? <Alert text={loadError}>
-      <button disabled={!online} onClick={() => setAttempt(value => value + 1)}>Try loading profile again</button>
-      {needsAuth && <button disabled={!online} onClick={signInAgain}>Sign in again</button>}
-    </Alert> : <form onSubmit={save}>
-      <div className="profile-summary"><Avatar name={savedName ?? ''}/><strong>{savedName}</strong></div>
-      <label>Display name
-        <input required value={name} autoComplete="nickname" aria-describedby="profile-name-help" disabled={saving} onChange={event => {setName(event.target.value); setNotice('');}}/>
-      </label>
-      <p id="profile-name-help" className="helper">Use 1–80 characters. This name is visible to people in your households and trips, including on earlier expenses.</p>
-      <Alert text={saveError}>{needsAuth && <button type="button" disabled={!online || saving} onClick={signInAgain}>Sign in again</button>}</Alert>
-      {notice && <p className="notice" role="status">{notice}</p>}
-      <button className="primary" disabled={!online || saving || name.trim() === savedName}>{saving ? 'Saving…' : 'Save profile'}</button>
-    </form>}
-    {group && membership && <p className="helper profile-membership">{group.kind === 'household' ? 'Household' : 'Trip'}: <strong>{group.name}</strong> · {membership.role === 'organiser' ? 'Organiser' : 'Member'}</p>}
+  const displayName = savedName ?? initialName ?? 'Your profile';
+  return <section className="account-profile-card" aria-labelledby="profile-heading">
+    <h2 id="profile-heading" className="sr-only">Your profile</h2>
+    <ProfilePhoto userId={userId} name={displayName} online={online} identity={<>
+      <p className="eyebrow profile-eyebrow">Your space in Pact</p>
+      <div className="profile-summary"><strong>{displayName}</strong></div>
+      {group && membership ? <p className="profile-membership"><span className="profile-role">{membership.role === 'organiser' ? 'Organiser' : 'Member'}</span><span className="profile-group"><span className="sr-only">{group.kind === 'household' ? 'Household' : 'Trip'}: </span>{group.name}</span></p> : <p className="helper profile-welcome">A familiar face for shared life.</p>}
+    </>}/>
+    <div className="profile-name-editor">
+      {loading ? <Loading text="Loading your profile…"/> : loadError ? <Alert text={loadError}>
+        <button disabled={!online} onClick={() => setAttempt(value => value + 1)}>Try loading profile again</button>
+        {needsAuth && <button disabled={!online} onClick={signInAgain}>Sign in again</button>}
+      </Alert> : <form onSubmit={save}>
+        <label>Display name
+          <input required value={name} autoComplete="nickname" aria-describedby="profile-name-help" disabled={saving} onChange={event => {setName(event.target.value); setNotice('');}}/>
+        </label>
+        <p id="profile-name-help" className="helper">Use 1–80 characters. Your households and trips see this name, including on earlier expenses.</p>
+        <Alert text={saveError}>{needsAuth && <button type="button" disabled={!online || saving} onClick={signInAgain}>Sign in again</button>}</Alert>
+        {notice && <p className="notice" role="status">{notice}</p>}
+        <div className="profile-save-row"><button className="primary" disabled={!online || saving || name.trim() === savedName}>{saving ? 'Saving…' : 'Save profile'}</button></div>
+      </form>}
+    </div>
   </section>;
 }

@@ -6,7 +6,7 @@ Pact is a small personal project built around shared-house living. Keep changes 
 
 Follow the README and use your own development backend. Use fictional names and transactions for screenshots, tests and issue reports. Never use another household's records as fixtures.
 
-Before submitting a change, run `npm run check`. Run `npm run test:browser` for UI, invitation, workflow or database changes. Explain any manual checks or untested behaviour in the pull request.
+Before submitting a change, run `npm run check` for the privacy gate, Node tests, TypeScript and build. Run `npm run test:browser` for UI, invitation, workflow or database changes. Photo/account changes also need `npm run test:privacy-browser`; notification changes need `npm run test:notifications-browser` and the dispatcher checks in its service guide. Explain hosted/manual checks and untested behaviour in the pull request.
 
 ## Commit organisation
 
@@ -26,4 +26,4 @@ Do not edit migrations that have already been applied. Add a new migration, veri
 
 ## Before pushing
 
-Review `git diff --cached` and the changed filenames. Do not commit `.env.local`, real emails, invitation links, private screenshots, database dumps, production identifiers or exports. A `.gitignore` rule helps avoid accidents; it does not make an already tracked file private.
+Run `npm run check:privacy`, then review `git diff --cached` and the changed filenames. Review every screenshot visually and update its reviewed hash only after confirming that all content is synthetic. Use GitHub's no-reply address for both commit author and committer metadata. Do not commit `.env.local`, real emails, invitation links, private screenshots, database dumps, production identifiers or exports. A `.gitignore` rule helps avoid accidents; it does not make an already tracked file private.

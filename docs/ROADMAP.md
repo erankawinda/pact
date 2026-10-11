@@ -4,7 +4,9 @@ Pact is a personal project built around the practical friction of living with ot
 
 ## Validate the household pilot
 
-- Complete the [two-account acceptance checks](DEPLOYMENT.md#5-verify-shared-workflows), including invitation acceptance, live updates and repayment confirmation. These were skipped for the current release; independent browser sessions can cover the shared workflows.
+- Complete a real production-account photo upload/read/delete acceptance check after the verified frontend rollout.
+- Validate real phone notifications: explicit permission, background receipt, involved participants only, account switching, tapping an alert and phone Focus settings. Hosted scheduling and simulated browser APIs do not establish device delivery.
+- Complete the [two-account acceptance checks](DEPLOYMENT.md#5-verify-shared-workflows), including invitation acceptance, live updates and repayment confirmation. These were skipped for preview.2; independent browser sessions can cover the shared workflows.
 - Exercise simultaneous updates against separate PostgreSQL sessions.
 - Check iPhone Safari, Android Chrome, Home Screen use, screen readers and enlarged text on actual devices.
 - Define and practise a backup/restore procedure before relying on the app for long-term records.
@@ -16,10 +18,13 @@ Pact is a personal project built around the practical friction of living with ot
 
 ## Planned product work
 
-The [deployed 0.4.0-preview.2 update](RELEASE-0.4-PREVIEW.md) includes custom-share auto-fill, basic profiles and device appearance choices. Hosted migration validation and deployment checks passed; the remaining multi-account and device checks are listed above.
+The current [preview.6 release](RELEASE-0.4.0-PREVIEW.6.md) includes recipient-recorded repayments, personal approval preferences, the minimal lime appearance, a redesigned account page and private photos with deletion before replacement. The [preview.5 notification service](RELEASE-0.4.0-PREVIEW.5.md) has hosted staging evidence but remains disabled in production; real phone delivery is unverified.
+
+Before extending these features, validate phone delivery, rehearse recovery from interrupted photo operations and document routine private Storage cleanup. Keep notification categories limited to changes involving the recipient; add reminders only with a separate explicit opt-in.
 
 The next product priorities are:
 
+- A simple view of enabled notification devices, including a way to revoke an unavailable old device.
 - Saved expense and split templates for repeated bills, with review before each new expense is posted.
 - A monthly household summary using the complete ledger, including corrections, refunds and confirmed repayments.
 - Private receipt attachments with explicit access controls.

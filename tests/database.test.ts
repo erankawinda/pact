@@ -9,6 +9,7 @@ test('PostgreSQL migration, ledger transactions and group isolation',async t=>{
   await db.exec(`create role anon; create role authenticated; create schema auth;
     create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{"providers":["google"]}');
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;`);
+ await db.exec(await readFile(new URL('./fixtures/platform.sql',import.meta.url),'utf8'));
   const migrationDir=new URL('../supabase/migrations/',import.meta.url);
   for(const file of (await readdir(migrationDir)).filter(f=>f.endsWith('.sql')).sort()) {
     await db.exec(await readFile(new URL(file,migrationDir),'utf8'));
