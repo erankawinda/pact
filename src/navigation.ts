@@ -1,21 +1,22 @@
 import {useEffect, useState} from 'react';
 
 export type Screen = 'home'|'shopping'|'expenses'|'balances'|'people'|'groups'|'account'|'household'|'trip'|'invite'|'join'|'expense'|'payment'|'activity'|'settings';
-export type Route = {screen:Screen;group:string;edit:string;purchase:string;to:string;amount:string};
+export type Route = {screen:Screen;group:string;edit:string;purchase:string;to:string;amount:string;direction:''|'sent'|'received'};
 const screens:Screen[]=['home','shopping','expenses','balances','people','groups','account','household','trip','invite','join','expense','payment','activity','settings'];
 function readRoute():Route {
   const p=new URLSearchParams(location.search);
   const screen=p.get('screen') as Screen;
-  return {screen:screens.includes(screen)?screen:'home',group:p.get('household')??'',edit:p.get('edit')??'',purchase:p.get('purchase')??'',to:p.get('to')??'',amount:p.get('amount')??''};
+  const direction=p.get('direction');
+  return {screen:screens.includes(screen)?screen:'home',group:p.get('household')??'',edit:p.get('edit')??'',purchase:p.get('purchase')??'',to:p.get('to')??'',amount:p.get('amount')??'',direction:direction==='sent'||direction==='received'?direction:''};
 }
 export function useRoute() {
   const [route,setRoute]=useState(readRoute);
   useEffect(()=>{const onPop=()=>setRoute(readRoute());window.addEventListener('popstate',onPop);return()=>window.removeEventListener('popstate',onPop);},[]);
   function navigate(screen:Screen,options:Partial<Omit<Route,'screen'>>={},replace=false) {
-    const next:Route={screen,group:options.group??route.group,edit:options.edit??'',purchase:options.purchase??'',to:options.to??'',amount:options.amount??''};
+    const next:Route={screen,group:options.group??route.group,edit:options.edit??'',purchase:options.purchase??'',to:options.to??'',amount:options.amount??'',direction:options.direction??''};
     const url=new URL(location.href);
     // Preserve any unrelated query values, but never propagate a consumed OAuth code.
-    for(const key of ['screen','household','edit','purchase','to','amount','code'])url.searchParams.delete(key);
+    for(const key of ['screen','household','edit','purchase','to','amount','direction','code'])url.searchParams.delete(key);
     if(screen!=='home')url.searchParams.set('screen',screen);
     for(const [key,value] of Object.entries({...next,screen:''}))if(value)url.searchParams.set(key==='group'?'household':key,value);
     if(url.pathname+url.search===location.pathname+location.search) {setRoute(next);return;}

@@ -43,7 +43,13 @@ Amounts use integer cents. Equal splits distribute leftover cents deterministica
 
 Custom splits keep manual values separate from calculated shares. One unknown share receives the remainder; several unknown shares require the explicit equal-remainder choice. An entered zero is fixed, while a blank is unknown. Review freezes the resulting integer shares, so interrupted saves retry the same request rather than recalculating against a newer draft.
 
-Balances are derived from posted expenses and shares, refunds and confirmed repayments. Recording a pending repayment does not change balances. Corrections retain the voided original and create a replacement expense; refunds are bounded by the refundable amount. Activity records make changes inspectable.
+Balances are derived from posted expenses and shares, refunds and confirmed repayments. Sender-recorded repayments settle automatically by default. If the recipient has enabled approval, new reports start pending and affect balances only after the recipient confirms. Existing pending records are not changed by a preference switch. In the 0.4.0-preview.3 candidate, recipients can instead record money already received: the session fixes the recipient, and that record is confirmed immediately. Amounts may be partial; the app does not cap transfers to a suggested balance or move money.
+
+A recipient cannot create another repayment while any pending record exists from the selected sender in that group. They must explicitly confirm or reject the pending report first. Both recording directions also check for a pending or confirmed record with the same group, sender, recipient, amount and date. A deliberate **This is a separate payment** acknowledgement allows distinct transfers with identical details; it cannot bypass the recipient's pending-record check. Different dates or amounts are not automatically treated as duplicates.
+
+The new `record_repayment` RPC and compatible `record_payment` RPC use the same insert helper. A transaction advisory lock serialises each directed participant pair, including when no payment row exists yet. Payment actions acquire that pair lock before locking their row. Request replay runs before these checks, so checking an uncertain save returns its earlier result without creating a second record. The old RPC retains its signature and original request hash; new exact duplicates are rejected, and older clients cannot override that guard.
+
+`recorded_by` identifies the participant who entered a payment; the migration backfills existing rows with their sender. Receipt activity identifies the recipient as the actor. Confirmed payments can be reversed by their recipient or an organiser, with a reason, while preserving history. Corrections retain the voided original expense and create a replacement; refunds are bounded by the refundable amount.
 
 Request IDs and stored operation results let supported mutations reconcile a retry without applying the same request twice. Version checks detect edits based on stale state. Local tests exercise these rules, but they do not certify races across independent PostgreSQL connections.
 
@@ -60,3 +66,7 @@ Vite emits static files for hosting. The manifest and icons support a Home Scree
 Only a Supabase URL and publishable key belong in the frontend build. Google secrets and privileged Supabase keys stay outside it. The checked-in headers assume hosted `*.supabase.co` endpoints.
 
 JSON export is a group snapshot, not a restorable database/Auth/Storage backup. Receipt attachments, reports and other deferred features are tracked in [ROADMAP.md](ROADMAP.md).
+
+### Payment preferences
+
+The verified caller reads and updates only their own global `require_payment_approval` preference through RPCs with no target-user argument. It defaults to false. Household snapshots expose this preference to authorised co-members so the sender sees the applicable rule. Recording locks the recipient profile while deciding between automatic settlement and pending approval. `confirmation_method` distinguishes automatic settlement from receipt acknowledged by the recipient; reversal retains this attribution. Existing payment amounts, statuses and participants are not changed by the preference migration.

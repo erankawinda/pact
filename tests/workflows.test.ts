@@ -25,6 +25,7 @@ test('household workflows preserve cents, history, identity, permissions and ret
  const expense=await save(input);assert.equal(await save(input),expense);
  assert.equal((await state(home)).expenses.length,1);
  let bal=await balance(home);assert.equal(bal[a]+bal[b],0);const debt=-bal[b];assert.ok([500,501].includes(debt));
+ await scalar("select public.set_payment_preferences(true)");
  await as(b);const paymentRequest=randomUUID();const payment=await scalar("select public.record_payment($1,$2,$3,'2026-10-05','Bank transfer',$4)",[home,a,debt,paymentRequest]);
  assert.deepEqual(await balance(home),bal,'pending payment does not affect balances');
  await assert.rejects(()=>scalar("select public.payment_action($1,$2,'confirm',1,'',$3)",[home,payment,randomUUID()]),/invalid_action/);

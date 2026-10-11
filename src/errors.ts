@@ -13,6 +13,10 @@ export function message(error: unknown): string {
   if (/has_refunds/.test(text)) return 'Undo the recorded refunds before correcting or voiding this expense.';
   if (/invalid_refund/.test(text)) return 'The refund must be positive and no more than the amount still refundable.';
   if (/last_organiser/.test(text)) return 'Make another person an organiser before removing the last organiser.';
+  if (/payment_pending_exists/.test(text)) return 'There is already a repayment from this person waiting for confirmation. Refresh, then confirm or review that record before adding another.';
+  if (/payment_already_recorded/.test(text)) return 'A repayment with this amount and date is already recorded. Refresh and check it. Only choose “This is a separate payment” if another transfer actually took place.';
+  if (/invalid_payment_preferences/.test(text)) return 'Choose whether incoming repayments need your approval, then save again.';
+  if (/profile_unavailable/.test(text)) return 'Your account profile could not be found. Sign in again and try once more.';
   if (/invalid_payment|invalid_action/.test(text)) return 'This action is no longer available. Refresh and check its current status.';
   if (/reason_required/.test(text)) return 'Add a short reason so everyone can understand the change.';
   if (/trip_member_must_belong/.test(text)) return 'This person needs to join your household before joining the trip.';
@@ -40,5 +44,5 @@ export function accessError(error: unknown): boolean {
 }
 
 export function definitelyRejected(error: unknown): boolean {
-  return ['P0001', '23514', '23503', '23502', '42501', '28000', '22P02', '22007', '22008'].includes(errorCode(error));
+  return ['P0001', '23514', '23503', '23502', '42501', '28000', '22P02', '22007', '22008', '22023'].includes(errorCode(error));
 }

@@ -7,8 +7,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8f9f5",
-  "theme_color": "#284f36",
+  "background_color": "#fafbf7",
+  "theme_color": "#fafbf7",
   "icons": [
     {
       "src": "/icons/pact-192.png",
