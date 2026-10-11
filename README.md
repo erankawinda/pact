@@ -10,10 +10,12 @@ Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with l
 
 The [auto-fill, profile and appearance update](docs/RELEASE-0.4-PREVIEW.md) was deployed on **6 October 2026** as **0.4.0-preview.2**. It combines the custom-share improvements from 0.3.1 with basic profiles and device appearance preferences.
 
+The next candidate, [0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), adds direct receipt recording, automatic settlement by default and each recipient’s own approval preference. It is **not deployed to production yet**.
+
 ## What it does
 
 - **Shared expenses:** choose the payer and participants, split equally or enter the amounts you know and calculate the remainder, then review before saving.
-- **Balances and repayments:** see who owes what; repayments affect balances when the recipient confirms them.
+- **Balances and repayments:** record money sent or received. New payments settle automatically by default; each recipient can require approval from Account.
 - **Shopping:** add quantities, claim an item, record partial purchases, and turn a purchase into an expense.
 - **Trips:** include only the people going and keep trip costs separate from the household.
 - **Household access:** Google sign-in, personal invitations, member management and an activity history.
@@ -103,7 +105,9 @@ Amounts are stored as integer cents. Household access is enforced in the databas
 
 ## Current stage
 
-**Version 0.4.0-preview.2 — a deployed household pilot.** Automated suites, hosted profile-migration validation, Google sign-in and live deployment checks passed. Independent two-account acceptance was skipped for this release; concurrent database sessions and actual-device accessibility still need broader validation. The app currently uses AUD and Melbourne time.
+**Production milestone: 0.4.0-preview.2 — deployed 6 October 2026.** Automated suites, hosted profile-migration validation, Google sign-in and live deployment checks passed. Independent two-account acceptance was skipped for this release; concurrent database sessions and actual-device accessibility still need broader validation. The app currently uses AUD and Melbourne time.
+
+**Candidate: 0.4.0-preview.3 — recipient-recorded repayments.** All 30 Node/database tests, 23 browser scenarios, TypeScript/build checks and 11 hosted staging check groups passed. Production migration and frontend upload remain separate steps. See the [candidate release notes](docs/RELEASE-0.4.0-PREVIEW.3.md).
 
 Receipt attachments, recurring bills, monthly reports and full backup restoration are not implemented. JSON export is a group snapshot, not a complete restorable backup. See the [status](docs/STATUS.md) and [roadmap](docs/ROADMAP.md).
 

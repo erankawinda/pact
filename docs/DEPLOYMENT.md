@@ -25,6 +25,8 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 2. [`20261004025331_relationship_indexes.sql`](../supabase/migrations/20261004025331_relationship_indexes.sql)
 3. [`20261005071001_household_workflows.sql`](../supabase/migrations/20261005071001_household_workflows.sql)
 4. [`20261006062916_editable_profiles.sql`](../supabase/migrations/20261006062916_editable_profiles.sql) — adds the own-name update operation.
+5. [`20261011030705_received_repayments.sql`](../supabase/migrations/20261011030705_received_repayments.sql) — adds recipient recording, recorder attribution and repayment duplicate guards.
+6. [`20261011035030_recipient_payment_preferences.sql`](../supabase/migrations/20261011035030_recipient_payment_preferences.sql) — adds recipient-owned approval preferences and automatic settlement by default.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 
@@ -84,12 +86,22 @@ Keep simulated transactions in a separate development environment. A short check
 1. Open a personal invitation with the intended Google account. Check account switching preserves the invitation and acceptance adds the member.
 2. Add a $10.01 expense with exact shares of $5.01 and $5.00. Both sessions must show the same expense and balances that sum to zero.
 3. Add a shopping item, claim it and mark part bought. The remaining quantity should be available for anyone to pick up because partial purchases clear the claim. Verify the other session updates, including after reconnecting.
-4. Record a simulated repayment. Balances must stay unchanged until its recipient confirms it. No real transfer is needed for this test.
+4. Record a simulated repayment as the sender: with the recipient’s default preference, balances update immediately and history says Settled automatically. Enable approval in the recipient’s Account and record a distinct transfer: this one stays pending until confirmed. Changing the setting must leave any existing pending record unchanged. Then use a separate simulated transfer to test **I received money** as the recipient: confirm the receipt and check that both balances update immediately. A partial amount should leave the remainder owing. Check that an existing pending report is confirmed rather than duplicated, and that equal amount/date records require an explicit separate-payment acknowledgement. No real transfer is needed in this synthetic test environment.
 5. Check Back, reload and recovery after a save request is interrupted. Going offline before saving instead disables Save; reconnect before submitting.
 6. For additional trip-privacy coverage, use a third account excluded from a trip and confirm it cannot access that trip.
 
 Optional physical-device checks cover decimal keyboards, enlarged text, screen-reader navigation and Home Screen installation. Record which checks actually ran. A skipped check remains unverified, even when a release proceeds.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
+
+## Upgrade to 0.4.0-preview.3
+
+From a backend already running the first four migrations, apply the fifth and sixth migrations in order. Validate them in staging before production: existing payment rows must retain their amounts, status and participants, with `recorded_by` backfilled to the sender. Check both recording directions, pending reconciliation, exact duplicate handling, reversal, permissions and replay of a request created before the migration.
+
+Apply both validated migrations to the target backend **before publishing the new frontend**. Existing amounts, participants and statuses must stay unchanged; new preferences default to automatic settlement. Older clients retain sender recording, confirmation and request recovery, but their old explanatory text does not describe automatic settlement, so reload open clients after deployment; a new exact duplicate is now rejected, and the older form has no separate-payment override. A frontend rollback can leave the additive migration in place. Do not rerun older migrations or delete ledger records to roll back the interface.
+
+The candidate is not yet deployed to production. See [0.4.0-preview.3 release notes](RELEASE-0.4.0-PREVIEW.3.md) for current staging evidence and unfinished validation.
+
+## Earlier upgrade from 0.3
 
 When upgrading from 0.3, validate only the new profile migration in a development environment already running the first three migrations. Confirm that an existing client still reads records, that a user can edit only their own name, and that other members see the name after refreshing. Profile changes must leave roles and ledger amounts unchanged. Verify System/Light/Dark appearance and name edits, then exercise custom-share auto-fill with one missing share, several missing shares and an interrupted save. Apply the validated migration to the target backend before publishing the combined frontend. See the [release notes](RELEASE-0.4-PREVIEW.md) for completed verification and remaining limits.
