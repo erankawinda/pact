@@ -22,12 +22,12 @@ function syntheticPhonePhoto(){
  return Buffer.concat([encoded.subarray(0,2),segment(225,exif),segment(254,Buffer.from('SYNTHETIC PRIVATE LOCATION')),encoded.subarray(2)]);
 }
 const source=syntheticPhonePhoto();
-async function fixture(initial='empty'){
+async function fixture(initial='empty',{statusFailure=false,displayName='Alex'}={}){
  const user={id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',role:'authenticated',email:'alex@example.test',email_confirmed_at:'2026-10-01T00:00:00Z',app_metadata:{provider:'google',providers:['google']},user_metadata:{full_name:'Alex'},created_at:'2026-10-01T00:00:00Z'};
  const session={access_token:[{alg:'HS256',typ:'JWT'},{sub:user.id,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'fixture'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.'),refresh_token:'local-only',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user};
  const context=await browser.newContext({viewport:{width:390,height:844},colorScheme:'light',reducedMotion:'reduce'});
  await context.addInitScript(session=>localStorage.setItem('sb-pact-photo-fixture-auth-token',JSON.stringify(session)),session);
- const state={status:initial,version:initial==='ready'?randomUUID():null,bytes:initial==='ready'?source:null,uploads:[],deletes:[],errors:[],unexpected:[],fail:'',profileWrites:0};
+ const state={status:initial,version:initial==='ready'?randomUUID():null,bytes:initial==='ready'?source:null,uploads:[],deletes:[],errors:[],unexpected:[],fail:statusFailure?'status':'',profileWrites:0,photoStatusReads:0};
  await context.routeWebSocket(/^wss:/,ws=>ws.close());
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.origin===host)return route.continue();
@@ -36,12 +36,16 @@ async function fixture(initial='empty'){
   if(req.method()==='OPTIONS')return json({});
   if(url.pathname==='/auth/v1/user')return json(user);
   if(url.pathname==='/rest/v1/groups')return json([]);
-  if(url.pathname==='/rest/v1/profiles')return json({display_name:'Alex'});
+  if(url.pathname==='/rest/v1/profiles')return json({display_name:displayName});
   if(url.pathname==='/rest/v1/rpc/get_payment_preferences')return json(false);
   if(url.pathname==='/rest/v1/rpc/update_profile'){state.profileWrites++;return json('Alex');}
   if(url.pathname==='/functions/v1/profile-photo'){
    assert.match(req.headers().authorization,/^Bearer /);assert.equal(req.headers().apikey,'sb_publishable_fixture_only');
-   if(req.method()==='GET'&&url.searchParams.get('status')==='1')return json({status:state.status,version:state.version,operation_id:state.version});
+   if(req.method()==='GET'&&url.searchParams.get('status')==='1'){
+    state.photoStatusReads++;
+    if(state.fail==='status'){state.fail='';return json({message:'Your photo could not be loaded. Please try again.'},503);}
+    return json({status:state.status,version:state.version,operation_id:state.version});
+   }
    if(req.method()==='GET')return state.status==='ready'?route.fulfill({status:200,contentType:'image/jpeg',body:state.bytes,headers:{'Cache-Control':'private, no-store'}}):json({message:'Photo is unavailable.'},404);
    if(req.method()==='POST'){
     const bytes=req.postDataBuffer(),id=req.headers()['x-request-id'];state.uploads.push({bytes,id});assert.equal(req.headers()['content-type'],'image/jpeg');
@@ -61,12 +65,47 @@ async function fixture(initial='empty'){
  });
  const page=await context.newPage();page.setDefaultTimeout(8000);page.on('pageerror',e=>state.errors.push(String(e)));page.on('console',message=>{if(/Encountered two children with the same key|Each child in a list should have a unique/.test(message.text()))state.errors.push(message.text());});await page.goto(host);
  await page.getByRole('button',{name:'Create a household',exact:true}).waitFor();await page.getByRole('button',{name:'Account',exact:true}).click();
- await page.getByRole('heading',{name:'A face to your name',exact:true}).waitFor();await page.getByRole('button',{name:initial==='ready'?'Remove photo':'Choose a photo',exact:true}).waitFor();
+ await page.locator('#profile-photo-heading').waitFor();
+ if(statusFailure)await page.getByRole('alert').waitFor();else await page.getByRole('button',{name:initial==='ready'?'Remove photo':'Choose a photo',exact:true}).waitFor();
  return {page,state,close:async()=>{assert.deepEqual(state.errors,[]);assert.deepEqual(state.unexpected,[]);await context.close();}};
 }
-async function choose(page){await page.getByLabel('Choose profile photo',{exact:true}).setInputFiles({name:'phone-photo.jpg',mimeType:'image/jpeg',buffer:source});await page.getByRole('button',{name:'Save photo',exact:true}).waitFor();}
+async function choose(page){const [chooser]=await Promise.all([page.waitForEvent('filechooser'),page.getByRole('button',{name:'Choose a photo',exact:true}).click()]);await chooser.setFiles({name:'phone-photo.jpg',mimeType:'image/jpeg',buffer:source});await page.getByRole('button',{name:'Save photo',exact:true}).waitFor();}
+async function reachable(locator,label){
+ await locator.scrollIntoViewIfNeeded();
+ const result=await locator.evaluate(element=>{const rect=element.getBoundingClientRect(),hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);return {visible:rect.left>=0&&rect.right<=innerWidth+1&&rect.top>=0&&rect.bottom<=innerHeight+1,uncovered:!!hit&&element.contains(hit)};});
+ assert.ok(result.visible&&result.uncovered,`${label}: ${JSON.stringify(result)}`);
+}
+async function accessibility(page,label){await page.addScriptTag({content:axe});const result=await page.evaluate(async()=>await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}}));assert.deepEqual(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],label);}
+async function capture(page,label){const top=()=>page.evaluate(async()=>{window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});await top();await page.screenshot({path:`${out}/${label}.png`,fullPage:true,animations:'disabled'});await top();await page.screenshot({path:`${out}/${label}-viewport.png`,fullPage:false,animations:'disabled'});}
 async function test(name,run){if(nameFilter&&!name.includes(nameFilter))return;try{await run();results.push({name,status:'passed'});console.log('PASS '+name);}catch(e){results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync(`${out}/${nameFilter?'results-focused':'results'}.json`,JSON.stringify(results,null,2));}}
 try{
+ await test('account layout keeps profile, photo and settings reachable at phone and tablet widths in both themes',async()=>{
+  const f=await fixture('empty',{displayName:'Alex Morgan'});
+  for(const scheme of ['light','dark']){
+   await f.page.emulateMedia({colorScheme:scheme});
+   for(const width of [320,390,768]){
+    await f.page.setViewportSize({width,height:844});
+    assert.ok(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${scheme} account overflows at ${width}`);
+    for(const name of ['Choose a photo','Switch Google account','Sign out'])await reachable(f.page.getByRole('button',{name,exact:true}),`${scheme} ${width}: ${name}`);
+    await reachable(f.page.getByLabel('Display name',{exact:true}),`${scheme} ${width}: display name`);
+    await accessibility(f.page,`${scheme} account ${width}`);
+    if(width===390)await capture(f.page,`account-redesign-${scheme}`);
+    if(width===320)await capture(f.page,`account-redesign-${scheme}-320`);
+   }
+  }
+  assert.equal(f.state.uploads.length+f.state.deletes.length+f.state.profileWrites,0);await f.close();
+ });
+ await test('photo status failures show a recoverable error and never unlock an unknown photo slot',async()=>{
+  const f=await fixture('empty',{statusFailure:true});
+  await f.page.getByRole('alert').getByText('Your photo could not be loaded. Please try again.',{exact:true}).waitFor();
+  assert.equal(await f.page.getByRole('button',{name:'Choose a photo',exact:true}).count(),0);
+  assert.equal(await f.page.getByRole('button',{name:'Remove photo',exact:true}).count(),0);
+  await capture(f.page,'photo-load-error');
+  await f.page.getByRole('button',{name:'Check photo status',exact:true}).click();
+  await f.page.getByRole('button',{name:'Choose a photo',exact:true}).waitFor();
+  assert.equal(await f.page.getByRole('alert').count(),0);assert.equal(f.state.photoStatusReads,2);
+  await choose(f.page);assert.equal(f.state.uploads.length,0,'recovered status allows a local preview, not an automatic upload');await f.close();
+ });
  await test('phone preparation honors orientation, crops locally and removes metadata before any upload',async()=>{
   const f=await fixture();const result=await f.page.evaluate(async b64=>{
    const {prepareProfilePhoto}=await import('/src/photoProcessing.ts');
