@@ -1,5 +1,6 @@
-import {useEffect, useRef, type ReactNode} from 'react';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {nameInitials} from './profile';
+import {usePhoto} from './PhotoContext';
 
 export type IconName = 'plus' | 'back' | 'down' | 'expense' | 'balance' | 'people' | 'home' | 'trip' | 'check' | 'search' | 'close' | 'shopping' | 'menu' | 'arrow' | 'clock' | 'arrow-up' | 'arrow-down' | 'sun' | 'moon' | 'system';
 const paths: Record<IconName, ReactNode> = {
@@ -38,9 +39,11 @@ export function Alert({text, children}: {text: string; children?: ReactNode}) {
 export function Loading({text = 'Loading your household…'}: {text?: string}) {
   return <div className="loading" role="status"><span className="spinner" aria-hidden="true"/>{text}</div>;
 }
-export function Avatar({name}: {name: string}) {
+export function Avatar({name,userId}: {name: string;userId?:string}) {
   const initials = nameInitials(name);
-  return <span className="avatar" aria-hidden="true">{initials || '?'}</span>;
+  const photo = usePhoto(userId);
+  const [failed,setFailed] = useState<string|null>(null);
+  return <span className="avatar" aria-hidden="true">{photo&&photo!==failed?<img src={photo} alt="" onError={()=>setFailed(photo)}/>:initials || '?'}</span>;
 }
 export function ScreenHeading({title, subtitle, children}: {title: string; subtitle?: string; children?: ReactNode}) {
   return <div className="screen-heading"><div><h1 tabIndex={-1} data-screen-heading>{title}</h1>{subtitle && <p className="muted">{subtitle}</p>}</div>{children}</div>;

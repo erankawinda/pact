@@ -232,7 +232,7 @@ export function Profile({userId, group, snapshot, online, onSaved}: {
       <button disabled={!online} onClick={() => setAttempt(value => value + 1)}>Try loading profile again</button>
       {needsAuth && <button disabled={!online} onClick={signInAgain}>Sign in again</button>}
     </Alert> : <form onSubmit={save}>
-      <div className="profile-summary"><Avatar name={savedName ?? ''}/><strong>{savedName}</strong></div>
+      <div className="profile-summary"><Avatar name={savedName ?? ''} userId={userId}/><strong>{savedName}</strong></div>
       <label>Display name
         <input required value={name} autoComplete="nickname" aria-describedby="profile-name-help" disabled={saving} onChange={event => {setName(event.target.value); setNotice('');}}/>
       </label>

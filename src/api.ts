@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import {captureInvite} from './invitations';
+import {disableDeviceNotifications} from './notifications';
 export {message} from './errors';
 export type Group = {id:string;name:string;kind:'household'|'trip';archived_at:string|null;parent_household_id:string|null};
 export type Member = {id:string;name:string;role:'organiser'|'member';status:'active'|'revoked';require_payment_approval:boolean};
@@ -44,6 +45,9 @@ export async function signInGoogle() {
 }
 
 export async function reauthenticate() {
+  // Every Google reauthentication can select another account. Detach this
+  // device before leaving so the next person cannot inherit its alerts.
+  await disableDeviceNotifications();
   // Drafts and outstanding requests are stored separately from the Auth session.
   try { sessionStorage.setItem('pact:return-to', location.pathname + location.search); } catch { /* Optional return route. */ }
   await signInGoogle();
