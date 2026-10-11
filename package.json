@@ -12,7 +12,9 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm test && npm run build",
-    "test:browser": "node qa/browser.mjs"
+    "test:browser": "node qa/browser.mjs",
+    "test:privacy-browser": "node qa/privacy-browser.mjs",
+    "test:notifications-browser": "node qa/notifications-browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

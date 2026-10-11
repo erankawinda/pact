@@ -34,7 +34,7 @@ Three payment-preference scenarios cover default automatic settlement with lost-
 
 The recipient form is checked at mobile widths and scanned with axe in light and dark appearance. The new form and pending-record screen have also been visually inspected. These checks use simulated authenticated sessions, not independent real Google accounts.
 
-Profile reads run against the actual `profiles` table with the fixture user's authenticated role and the migrations' row-level policies. The REST fixture supports array responses and the object response requested by `single()`; it does not replace Google metadata or the authentication session when a display name changes. Profile writes use the real `update_profile` database function. The 30 Node tests in `tests/` provide additional money and database checks. `received-payment.test.ts` exercises the migration on pre-existing payment records, legacy request replay, receipt/reversal balances, both recording orderings, duplicate overrides, permissions and input validation.
+Profile reads run against the actual `profiles` table with the fixture user's authenticated role and the migrations' row-level policies. The REST fixture supports array responses and the object response requested by `single()`; it does not replace Google metadata or the authentication session when a display name changes. Profile writes use the real `update_profile` database function. The Node tests in `tests/` provide additional money and database checks. `received-payment.test.ts` exercises the migration on pre-existing payment records, legacy request replay, receipt/reversal balances, both recording orderings, duplicate overrides, permissions and input validation.
 
 Generated results and screenshots go to `qa/artifacts/`, which is ignored by Git. Selected synthetic screenshots in `docs/images/` illustrate the app; they are not household records.
 
@@ -46,9 +46,33 @@ Optional local overrides:
 - `PACT_CHROMIUM_PATH`: installed Chromium executable path.
 - `PACT_AXE_PATH`: alternative axe script. The pinned axe package is used by default.
 
+## Notifications and private photos
+
+Run the feature-specific checks from the repository root:
+
+```sh
+npm test
+npm run test:privacy-browser
+npm run test:notifications-browser
+```
+
+Both additional browser harnesses ignore local environment files and use synthetic HTTP responses with external traffic intercepted. They enable only their feature under test. The existing twenty-four-scenario suite retains its default-disabled feature configuration.
+
+The six photo browser scenarios use synthetic JPEGs and canvases. They verify EXIF orientation, a centred 512-pixel crop, metadata removal, preview before upload, light/dark accessibility and narrow layouts, no original-file upload, stable request IDs and bytes on retry, lost-response reconciliation, unfinished deletion blocking replacement, renewed confirmation after a stale photo version, local rejection of a non-image disguised as JPEG, and delayed session lookup preventing a previous account’s draft or deletion confirmation from writing to another account. Results and a synthetic account screenshot are written to `qa/artifacts/privacy/`. A focused rerun can use a name substring, for example `npm run test:privacy-browser -- 'account change'`; it writes `results-focused.json` without replacing full-suite results.
+
+The notification browser harness covers permission requested by an explicit button gesture, denied and unsupported recovery, iOS installation guidance, category and tone preferences, test delivery requests, device disabling, sign-out/account-change cleanup, stale permission or subscription completion, reset/retry handling, and validated notification navigation. Native Push and Notification APIs are simulated; the harness does not send real push messages. Its results are written to `qa/artifacts/notifications-browser-results.json`.
+
+The backend checks use the real migrations and functions with synthetic managed-platform tables:
+
+- `notifications.test.ts` checks participant and trip isolation, actor exclusion, multiple devices, registration ownership and limits, session expiry/revocation, correction recipient unions, idempotent retries, future-only subscriptions, preferences at enqueue and delivery, repayment/refund transitions, worker leases and permanent endpoint failures. Profile and shopping activity remain silent.
+- `profilePhotos.test.ts` checks service-only lifecycle operations, browser Storage denial, current shared membership, membership revocation during a read, deletion before replacement, stale-generation safety, uncertain uploads and expired leases, server image decoding and metadata stripping, streamed body limits and private responses. The injected Edge handler uses the actual lifecycle SQL while object bytes live in a test map.
+- `photoProcessing.test.ts` checks JPEG, PNG, WebP and bounded HEIF headers, byte offsets, dimensions and source-size limits, malformed containers, unsupported animation and non-image input. Native browser decoding and processing are exercised separately by the photo browser suite.
+
+The Storage fixture models bucket configuration, object metadata and row-level access only. It does not emulate hosted Storage HTTP requests, object cleanup internals or signed Google sessions. Database requests are serialized, so interleaved retry tests do not substitute for simultaneous PostgreSQL sessions.
+
 ## Limits
 
-PGlite serialises the fixture's database queries. These tests do not establish correctness under separate concurrent PostgreSQL sessions, actual Google OAuth, Supabase Realtime delivery, native phone installation or screen-reader use. Axe checks are useful evidence, not a claim of complete accessibility conformance.
+PGlite serialises the fixture's database queries. These tests do not establish correctness under separate concurrent PostgreSQL sessions, actual Google OAuth, Supabase Realtime delivery, native phone installation or screen-reader use. They also do not verify APNs/FCM/Mozilla push delivery, real lock-screen behavior, OS battery restrictions, or native HEIC decoding on a particular phone. Those require hosted and physical-device acceptance checks. Axe checks are useful evidence, not a claim of complete accessibility conformance.
 
 `tests/hosted-smoke.sql` is a separate administrative script for an empty development database. It creates synthetic records inside a transaction and rolls them back. It is not part of CI and must not be run against a household's production database.
 
