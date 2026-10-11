@@ -1,6 +1,6 @@
 # Development setup and deployment
 
-Pact is a static React application backed by Supabase Auth, PostgreSQL and Realtime. Use your own development project and synthetic household records when working on a fork. This repository contains no configured hosted environment or real household data.
+Pact is a static React application backed by Supabase Auth, PostgreSQL and Realtime. Optional private photos and notifications also use Storage and Edge Functions; notifications require Vault, Cron and pg_net. Use your own development project and synthetic household records when working on a fork. This repository contains no configured hosted environment or real household data.
 
 ## 1. Install and check the source
 
@@ -13,7 +13,7 @@ npm run check
 
 `check` runs the Node test suite, TypeScript validation and a Vite build. These checks use disposable local database fixtures and do not require a hosted Supabase project. A successful build without environment variables does not create a connected app.
 
-The separate browser/accessibility suite runs with `npm run test:browser`; see [qa/README.md](../qa/README.md) for Chromium installation and generated artifacts.
+Run `npm run test:browser`, `npm run test:privacy-browser` and `npm run test:notifications-browser` for the three isolated browser/accessibility suites. See [qa/README.md](../qa/README.md) for Chromium installation, coverage and generated artifacts. The notification worker also has [separate Deno checks](../supabase/functions/dispatch-notifications/README.md#deploy-to-staging-first).
 
 ## 2. Create a development backend
 
@@ -27,6 +27,9 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 4. [`20261006062916_editable_profiles.sql`](../supabase/migrations/20261006062916_editable_profiles.sql) — adds the own-name update operation.
 5. [`20261011030705_received_repayments.sql`](../supabase/migrations/20261011030705_received_repayments.sql) — adds recipient recording, recorder attribution and repayment duplicate guards.
 6. [`20261011035030_recipient_payment_preferences.sql`](../supabase/migrations/20261011035030_recipient_payment_preferences.sql) — adds recipient-owned approval preferences and automatic settlement by default.
+7. [`20261011083914_transaction_notifications.sql`](../supabase/migrations/20261011083914_transaction_notifications.sql) — adds private preferences, session-bound device subscriptions and the transaction outbox.
+8. [`20261011083917_private_profile_photos.sql`](../supabase/migrations/20261011083917_private_profile_photos.sql) — adds the private photo bucket and server-only lifecycle operations.
+9. [`20261011085233_notification_relationship_indexes.sql`](../supabase/migrations/20261011085233_notification_relationship_indexes.sql) — adds indexes for notification cleanup and device revocation.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 
@@ -49,7 +52,17 @@ VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
 ```
 
-Do not use a Supabase secret/service-role key or a Google client secret here. Vite embeds these two public settings in the browser bundle. Keep `.env.local` out of Git.
+Do not use a Supabase secret/service-role key, Google client secret, VAPID private key or scheduler token here. Vite embeds its `VITE_` values in the browser bundle. Keep `.env.local` out of Git.
+
+Leave the new feature flags disabled until their matching server setup passes validation:
+
+```dotenv
+VITE_PROFILE_PHOTOS_ENABLED=false
+VITE_NOTIFICATIONS_ENABLED=false
+VITE_WEB_PUSH_PUBLIC_KEY=
+```
+
+For an environment with a validated photo service, set `VITE_PROFILE_PHOTOS_ENABLED=true`. For notifications, also set `VITE_NOTIFICATIONS_ENABLED=true` and supply that environment's VAPID **public** key. These are build-time settings; changing them requires rebuilding the static site. See the [preview.5 upgrade steps](#upgrade-to-040-preview5).
 
 Run with the same origin used in your Google and Supabase settings:
 
@@ -67,11 +80,11 @@ Build with the intended environment values in place:
 npm run check
 ```
 
-The website is the **contents of `dist/`**, including `index.html`, assets, icons, `_headers` and `_redirects`. Do not upload the source repository as a website.
+The website is the **contents of `dist/`**, including `index.html`, assets, icons, `push-sw.js`, `_headers` and `_redirects`. The service worker is used only when notifications are enabled; keep it at the site root so its scope can cover Pact. Do not upload the source repository as a website.
 
 For a Cloudflare Pages Direct Upload project, upload `dist/` or a ZIP whose root contains `index.html`. For an existing project, create a new deployment and choose the intended environment. Keep a known-good deployment available for a frontend rollback. Cloudflare's [Direct Upload guide](https://developers.cloudflare.com/pages/get-started/direct-upload/) covers this flow.
 
-For a new Pages project connected to Git, use `npm run build` as the build command, `dist` as the output directory and set both `VITE_` variables in the build environment. Configure a Node version meeting `package.json`. See the [Vite Pages guide](https://developers.cloudflare.com/pages/framework-guides/deploy-a-vite3-project/).
+For a new Pages project connected to Git, use `npm run build` as the build command, `dist` as the output directory and set the public `VITE_` connection values and intended feature flags in the build environment. Configure a Node version meeting `package.json`. See the [Vite Pages guide](https://developers.cloudflare.com/pages/framework-guides/deploy-a-vite3-project/).
 
 A Direct Upload project cannot be converted to native Git integration in place; that requires a new Pages project. Adding the source to Git does not itself change hosting or enable automatic deployment. [Cloudflare deployment modes](https://developers.cloudflare.com/pages/get-started/direct-upload/)
 
@@ -86,13 +99,46 @@ Keep simulated transactions in a separate development environment. A short check
 1. Open a personal invitation with the intended Google account. Check account switching preserves the invitation and acceptance adds the member.
 2. Add a $10.01 expense with exact shares of $5.01 and $5.00. Both sessions must show the same expense and balances that sum to zero.
 3. Add a shopping item, claim it and mark part bought. The remaining quantity should be available for anyone to pick up because partial purchases clear the claim. Verify the other session updates, including after reconnecting.
-4. Record a simulated repayment as the sender: with the recipient’s default preference, balances update immediately and history says Settled automatically. Enable approval in the recipient’s Account and record a distinct transfer: this one stays pending until confirmed. Changing the setting must leave any existing pending record unchanged. Then use a separate simulated transfer to test **I received money** as the recipient: confirm the receipt and check that both balances update immediately. A partial amount should leave the remainder owing. Check that an existing pending report is confirmed rather than duplicated, and that equal amount/date records require an explicit separate-payment acknowledgement. No real transfer is needed in this synthetic test environment.
+4. Record a simulated repayment as the sender: with the recipient’s default preference, balances update immediately and history says Settled automatically. Enable approval in the recipient’s Account and record a distinct transfer: this one stays pending until confirmed. Changing the setting must leave any existing pending record unchanged. Then use a separate simulated transfer to test **I received** as the recipient: confirm the receipt and check that both balances update immediately. A partial amount should leave the remainder owing. Check that an existing pending report is confirmed rather than duplicated, and that equal amount/date records require an explicit separate-payment acknowledgement. No real transfer is needed in this synthetic test environment.
 5. Check Back, reload and recovery after a save request is interrupted. Going offline before saving instead disables Save; reconnect before submitting.
 6. For additional trip-privacy coverage, use a third account excluded from a trip and confirm it cannot access that trip.
 
 Optional physical-device checks cover decimal keyboards, enlarged text, screen-reader navigation and Home Screen installation. Record which checks actually ran. A skipped check remains unverified, even when a release proceeds.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
+
+## Upgrade to 0.4.0-preview.5
+
+This candidate includes preview.4's appearance and adds private photos and optional phone notifications. Its staging backend passed the checks in the [release notes](RELEASE-0.4.0-PREVIEW.5.md); production is unchanged and real phone delivery remains unverified. A frontend upload alone cannot activate these features.
+
+### Prepare the backend
+
+1. On a staging backend with the first six migrations installed, apply migrations 7–9 above in order. Keep existing profiles, membership, transaction amounts and payment preferences intact. Reconcile migration history before using CLI `db push` on a manually configured project.
+2. Deploy `profile-photo` using its [service guide](../supabase/functions/profile-photo/README.md). Its own Auth validation must run on every request, including when the gateway's legacy JWT check is disabled for an asymmetric-signing-key project. It reads the hosted `SUPABASE_URL` and the `default` entry of `SUPABASE_SECRET_KEYS`, with legacy `SUPABASE_SERVICE_ROLE_KEY` fallback. None of those server keys belongs in the browser.
+3. Check the private `profile-photos` bucket, its size/type limits and all applicable `storage.objects` policies. No broad existing policy may grant browser access to this bucket. Validate actual processing, upload, co-member reads, outsider denial, metadata removal, replacement refusal and Storage deletion.
+4. Deploy `dispatch-notifications` and configure its [server secrets and Vault/Cron schedule](../supabase/functions/dispatch-notifications/README.md). Its custom scheduler-token check must remain enabled. A browser user token or public publishable key is not permission to dispatch notifications.
+
+For the notification worker, the Edge secrets are `PACT_DISPATCH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`. The subject is a real HTTPS project/contact URL or a mailto contact. Vault holds the private function URL under `pact_notification_dispatch_url` and the matching scheduler token under `pact_notification_dispatch_secret`. Review the [schedule template](../supabase/functions/dispatch-notifications/schedule.sql); it contains secret names only. Never paste actual keys, tokens, project identities or personal contacts into versioned files.
+
+Use a separate VAPID pair and scheduler token for production. Complete the same backend steps there only after reviewing staging results and the deployment target. The frontend's `VITE_WEB_PUSH_PUBLIC_KEY` must match that environment's `VAPID_PUBLIC_KEY`; the public key is safe to embed, its private counterpart is not.
+
+### Validate the enabled frontend
+
+Build a staging site with the corresponding flags enabled. Sign in with synthetic test accounts and check photo preview, save, refresh, deletion and replacement. Interrupt a save and reconcile its status before starting a new upload; never assume a timeout means the image was not stored. Confirm an account change cannot submit the previous account's selected photo under the new session.
+
+Enable phone notifications from Account using an explicit button tap. iPhone and iPad require iOS/iPadOS 16.4+ and Pact opened from its Home Screen installation. Verify a test notification arrives with the app closed, then make a synthetic transaction from a different account and confirm that only involved recipients receive it. Check categories, tone, tapping an alert, and sign-out/account-switch cleanup. Focus, battery settings and browser policy can delay delivery.
+
+An authorized empty-queue worker response or successful Cron invocation verifies service setup, not delivery to a phone. Record the actual device result separately. The isolated browser suite simulates the native push APIs and does not close this gap.
+
+Once the intended backend is ready, upload its configured static build and verify Account shows **0.4.0-preview.5**. If a backend feature is not ready, keep its flag disabled in that build. Reopening Pact must continue to show the same ledger and account preferences.
+
+### Rollback and maintenance
+
+Keep an earlier frontend deployment available. The preview.4 appearance package can run on the existing preview.3 backend without these three new migrations. If preview.5 migrations are already installed, leave them in place during a frontend rollback; do not delete ledger records, photo objects or lifecycle rows as an interface rollback.
+
+Pause the notification Cron job separately if delivery must stop. Reverting frontend files does not revoke installed browser subscriptions, remove service workers or recall pushes already accepted by a provider. Do not claim a rollback has disabled delivery until the schedule and relevant devices are checked.
+
+Use the Storage API and the photo lifecycle checks to clean up expired unfinished uploads. Direct deletion of `storage.objects` metadata is not object deletion. Before administratively deleting an Auth account, remove that account's private photo through the supported service/Storage process. Monitor outbox age and provider failures privately; the worker retains terminal delivery history for seven days and revoked subscriptions for thirty days.
 
 ## Upgrade to 0.4.0-preview.4
 

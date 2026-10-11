@@ -2,22 +2,30 @@
 
 Pact **0.4.0-preview.3** was verified in production on **11 October 2026**: the served JavaScript matched the prepared release bundle and 15 profile, household-state and repayment function bodies matched the reviewed source. This is a dated verification, not a live service-status report. The read-only preflight did not read or change household records.
 
-## Next candidate: minimal appearance
+## Next candidate: private photos and transaction notifications
 
-**0.4.0-preview.4**, prepared **11 October 2026**, is **ready for manual upload and not deployed yet**. It adopts warm-white, charcoal and lime colours, an unboxed balance, aligned divider lists, a floating navigation bar, account initials and native appearance choices. The existing payment approval, reversal and recovery behavior remains. There is no new database migration.
+**0.4.0-preview.5**, prepared **11 October 2026**, is a **staging candidate**. Hosted backend checks passed; production has not been updated. Real phone notification delivery remains unverified.
 
 | Candidate check | Evidence |
 |---|---|
-| Node/database suite | All 30 tests passed |
-| TypeScript and production builds | Passed; configured build retains the bundle-size advisory |
-| Isolated browser suite | All 24 scenarios passed, including main screens in both themes at 320/390/768/1280 widths |
-| Layout and access checks | Large and zero balances, long names, 12-person household, two-person trip, keyboard navigation, footer clearance, short dialogs and automated accessibility scans |
-| Visual review | Synthetic app screenshots inspected; README gallery refreshed |
-| Production preflight | Preview.3 public frontend and profile/repayment function bodies match the reviewed source; no new SQL needed |
+| Node suite | All 57 tests passed: 30 existing, 9 notification, 6 photo, 4 image-header and 8 service-worker tests |
+| Isolated browser suites | All 39 scenarios passed: 24 existing, 6 photo and 9 notification scenarios |
+| Notification worker | Deno typecheck and 7 synthetic-provider runtime tests passed |
+| Hosted staging | 13 check groups passed, including actual image processing/Storage lifecycle, co-member and outsider access, revoked membership, metadata/body limits and deletion cleanup |
+| Dispatcher and scheduler | Unauthorized invocation returned 401; authorized empty-queue invocation and three scheduled calls returned 200 |
+| Backend source parity | All 30 reviewed function bodies matched final source |
 
-See [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md) for deployment order and validation limits. The previous repayment release's 11 hosted staging check groups remain recorded in [preview.3 notes](RELEASE-0.4.0-PREVIEW.3.md); the appearance release does not change their schema or functions.
+The candidate adds device opt-in notifications with private generic text, category and tone choices, and session/membership checks. It adds private profile photos with preview, metadata removal and deletion before replacement. See [preview.5 release notes](RELEASE-0.4.0-PREVIEW.5.md) for the completed checks and remaining deployment steps.
 
-## Implemented
+The staging advisor's private-table RLS notices are expected because client access is intentionally denied. Its existing password-protection warning was not introduced by this Google-sign-in update. These observations do not replace access testing.
+
+## Appearance package ready for upload
+
+**0.4.0-preview.4** remains **ready for manual upload and not deployed yet**. It introduces warm-white, charcoal and lime colours, an unboxed balance, aligned lists, a floating navigation bar and account initials. It passed 30 Node/database tests and 24 isolated browser scenarios, including both themes, small screens, large/zero balances and automated accessibility checks. TypeScript and production builds passed; configured builds retain the bundle-size advisory.
+
+This separate package needs **no new SQL** on a preview.3 backend. Its production preflight matched the prepared preview.3 frontend and 15 existing profile/repayment function bodies. See [preview.4 release notes](RELEASE-0.4.0-PREVIEW.4.md). Preview.5 includes that appearance but requires its additional migrations and server setup.
+
+## Core features
 
 - Home, Shopping, Expenses and Balances navigation.
 - Google sign-in, personal invitations, household membership and selected trip participants.
@@ -49,6 +57,6 @@ Two-phone and independent two-account acceptance were **skipped for 0.4.0-previe
 
 PGlite serialises fixture queries, and the browser harness intercepts external traffic. These tests do not certify races across separate PostgreSQL connections, real multi-client Realtime delivery, native installation or screen-reader use. The hosted database and one-account Google checks extend that evidence without closing all of those gaps.
 
-Concurrency testing, broader device checks and a backup/restore rehearsal remain outstanding. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
+Real phone push acceptance, concurrent PostgreSQL sessions, broader device checks and a backup/restore rehearsal remain outstanding. Receipt attachments, monthly reports, dispute flags, a separate pantry inventory and an import/restore flow remain planned.
 
 The app records repayments; it does not transfer money. It has no offline transaction queue. JSON export is a group snapshot, not a complete database/Auth/Storage backup. See [ROADMAP.md](ROADMAP.md) for the next work and [RELEASE-0.3.md](RELEASE-0.3.md) for the earlier milestone.

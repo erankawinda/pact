@@ -8,11 +8,9 @@ The idea is simple: one place to record what happened, choose who shares the cos
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with light and dark themes and a home-screen web app icon.
 
-The [auto-fill, profile and appearance update](docs/RELEASE-0.4-PREVIEW.md) was deployed on **6 October 2026** as **0.4.0-preview.2**. It combines the custom-share improvements from 0.3.1 with basic profiles and device appearance preferences.
+The [repayment update, 0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), is the latest verified production release, checked on **11 October 2026**. It adds direct receipt recording, automatic settlement by default and each recipient's own approval preference.
 
-The [repayment update, 0.4.0-preview.3](docs/RELEASE-0.4.0-PREVIEW.3.md), is deployed and was verified on **11 October 2026**. It adds direct receipt recording, automatic settlement by default and each recipient’s own approval preference.
-
-The next candidate, [0.4.0-preview.4](docs/RELEASE-0.4.0-PREVIEW.4.md), brings a minimal warm-white, charcoal and lime appearance to the working app. It is **prepared for upload, not deployed yet**.
+The [preview.4 appearance package](docs/RELEASE-0.4.0-PREVIEW.4.md) is ready for manual upload with no new SQL. The next candidate, [0.4.0-preview.5](docs/RELEASE-0.4.0-PREVIEW.5.md), includes that appearance plus private profile photos and optional transaction notifications. Its hosted staging backend is validated; **production is unchanged and real phone notification delivery remains unverified**.
 
 ## What it does
 
@@ -25,6 +23,8 @@ The next candidate, [0.4.0-preview.4](docs/RELEASE-0.4.0-PREVIEW.4.md), brings a
 - **Corrections and exports:** retain the original expense when correcting it, record refunds, and export the group ledger.
 
 Pact records repayments; it does not transfer money.
+
+The preview.5 candidate adds **private profile photos** with a local preview and deletion before replacement, and **phone notifications** for transactions involving the recipient. Notifications have category and tone choices and keep names and amounts off the lock screen. These features need the additional backend setup in the [deployment guide](docs/DEPLOYMENT.md#upgrade-to-040-preview5).
 
 ## A look inside
 
@@ -85,11 +85,13 @@ Only a **publishable** Supabase key belongs in the browser. Database passwords, 
 npm run check
 npx playwright install chromium
 npm run test:browser
+npm run test:privacy-browser
+npm run test:notifications-browser
 ```
 
 `check` runs the Node tests, TypeScript checks and production build. Database tests apply the actual SQL migrations to disposable PGlite databases. Browser tests use fictional accounts, intercept external traffic, and run accessibility checks with axe. No production credentials are needed.
 
-GitHub Actions runs both suites on pushes and pull requests. See [QA instructions](qa/README.md) for the coverage and its limits.
+GitHub Actions runs the Node suite, all three browser suites and the notification worker checks. The worker uses Deno; its local check commands are documented in the [service guide](supabase/functions/dispatch-notifications/README.md). See [QA instructions](qa/README.md) for coverage and its limits.
 
 ## How it fits together
 
@@ -97,6 +99,7 @@ GitHub Actions runs both suites on pushes and pull requests. See [QA instruction
 src/                    React screens, navigation, sync and money helpers
 public/                 App icons, web manifest and hosting headers
 supabase/migrations/    Versioned schema, access rules and database operations
+supabase/functions/     Private photo service and notification dispatcher
 tests/                  Money, workflow, database and interaction tests
 qa/                     Isolated browser test harness
 docs/                   Architecture, setup, deployment, status and roadmap
@@ -107,9 +110,9 @@ Amounts are stored as integer cents. Household access is enforced in the databas
 
 ## Current stage
 
-**Production milestone: 0.4.0-preview.2 — deployed 6 October 2026.** Automated suites, hosted profile-migration validation, Google sign-in and live deployment checks passed. Independent two-account acceptance was skipped for this release; concurrent database sessions and actual-device accessibility still need broader validation. The app currently uses AUD and Melbourne time.
+**Production:** preview.3 was verified on 11 October 2026. **Prepared appearance package:** preview.4 is ready for frontend-only upload. **Next staging candidate:** preview.5 passed 57 Node tests, 39 isolated browser scenarios, 7 worker runtime tests and 13 hosted check groups. See [status](docs/STATUS.md) for the evidence and deployment boundaries.
 
-**Candidate: 0.4.0-preview.3 — recipient-recorded repayments.** All 30 Node/database tests, 23 browser scenarios, TypeScript/build checks and 11 hosted staging check groups passed. Production migration and frontend upload remain separate steps. See the [candidate release notes](docs/RELEASE-0.4.0-PREVIEW.3.md).
+Independent two-account acceptance was skipped for the earlier preview.2 release. Real phone push delivery, concurrent database sessions, native accessibility and backup restoration still need validation. The app uses AUD and Melbourne time.
 
 Receipt attachments, recurring bills, monthly reports and full backup restoration are not implemented. JSON export is a group snapshot, not a complete restorable backup. See the [status](docs/STATUS.md) and [roadmap](docs/ROADMAP.md).
 
