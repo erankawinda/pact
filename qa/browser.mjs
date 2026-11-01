@@ -133,6 +133,7 @@ try{
   await addExpense(page,{amount:'10.01',name:'Shared court booking',people:['Blake']});
   await page.getByRole('button',{name:'Custom amounts',exact:true}).click();await page.getByLabel("Blake's share",{exact:true}).fill('4');
   await page.getByRole('button',{name:'Include someone who has not joined',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'Back',exact:true}).count(),1);
   await page.getByLabel('Their name',{exact:true}).fill('Guest Devin');await page.getByLabel('Google email',{exact:true}).fill('devin@example.test');
   f.state.abortOnce='add_pending_participant';await page.getByRole('button',{name:'Include & create link',exact:true}).click();
   await page.getByRole('button',{name:'Check inclusion',exact:true}).click();await page.getByRole('heading',{name:'Their place is ready',exact:true}).waitFor();
@@ -626,6 +627,9 @@ try{
   async function openEmailInvite(page){await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Invite a flatmate',exact:true}).click();await page.getByLabel('Google email').fill('guest@example.test');}
   await test('Invitation email can accompany a pending trip place without granting membership',async()=>{
    const f=await fixture({tripGuest:true}),{page}=f;await openTrip(page);await page.getByRole('button',{name:'People & trips',exact:true}).click();
+   assert.equal(await page.getByRole('button',{name:'Back',exact:true}).count(),1);
+   await page.getByRole('button',{name:'Include someone',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Back',exact:true}).count(),1);
+   await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('heading',{name:'People & trips',exact:true}).waitFor();
    await page.getByRole('button',{name:'Include someone',exact:true}).click();await page.getByLabel('Their name',{exact:true}).fill('Guest Devin');await page.getByLabel('Google email',{exact:true}).fill('devin@example.test');
    assert.equal(await page.getByRole('checkbox',{name:'Email their invitation',exact:true}).isChecked(),true);
    await page.getByRole('button',{name:'Include & invite',exact:true}).click();await page.getByRole('heading',{name:'Email sent',exact:true}).waitFor();

@@ -8,7 +8,7 @@ import {invitationEmailEnabled,invitationEmailLabel,loadInvitationEmailStatus,ty
 import {download,ledgerCsv} from './export';
 import {Alert,Avatar,Icon,Loading,ScreenHeading} from './ui';
 import type {ViewProps} from './HouseholdViews';
-export function People({group,groups,snapshot,userId,online,mutation,navigate,ask,refreshPeople}:ViewProps&{groups:Group[];refreshPeople:()=>Promise<void>}){
+export function People({group,groups,snapshot,userId,online,mutation,navigate,ask,refreshPeople,onBack}:ViewProps&{groups:Group[];refreshPeople:()=>Promise<void>;onBack:()=>void}){
  const active=snapshot.members.filter(member=>member.status==='active'&&member.auth_user_id!==null);
  const waiting=snapshot.members.filter(member=>member.auth_user_id===null);
  const organiser=isOrganiser(snapshot,userId),blocked=!online||!!group.archived_at||mutation.busy||!!mutation.pending;
@@ -38,6 +38,7 @@ export function People({group,groups,snapshot,userId,online,mutation,navigate,as
  function action(action:string,target:string|null,value=''){return mutation.run('group_action',{p_group:group.id,p_action:action,p_target:target,p_value:value},'Update people');}
  if(including&&organiser)return <IncludePersonForm group={group} online={online} onBack={()=>{setIncluding(false);void refreshPeople();}} onIncluded={async()=>{await refreshPeople();setIncluding(false);}}/>;
  return <>
+  <div className="form-top"><button className="text-button" onClick={onBack}><Icon name="back"/>Back</button></div>
   <ScreenHeading title="People & trips" subtitle={`${active.length} ${active.length===1?'person':'people'} joined in ${group.name}${waiting.length?` · ${waiting.length} ${waiting.length===1?'place':'places'} waiting`:''}`}/>
   {organiser&&group.kind==='trip'&&<><button className="primary full invite-people" disabled={blocked} onClick={()=>navigate('invite')}><Icon name="plus"/>Invite a friend</button><p className="helper">Invite by Google email. They join only this trip, with no household access included.</p></>}
   {organiser&&<section className="card include-person-prompt"><p className="eyebrow">Keep everyone in the picture</p><h2>Include now, join later</h2><p className="helper">Someone has not joined yet? Give them a place in this {group.kind}, record their share now, and let their invitation connect it when they are ready.</p><button disabled={blocked} onClick={()=>setIncluding(true)}><Icon name="plus"/>Include someone</button></section>}
