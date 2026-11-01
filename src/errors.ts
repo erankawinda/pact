@@ -19,7 +19,7 @@ export function message(error: unknown): string {
   if (/profile_unavailable/.test(text)) return 'Your account profile could not be found. Sign in again and try once more.';
   if (/invalid_payment|invalid_action/.test(text)) return 'This action is no longer available. Refresh and check its current status.';
   if (/reason_required/.test(text)) return 'Add a short reason so everyone can understand the change.';
-  if (/trip_member_must_belong/.test(text)) return 'This person needs to join your household before joining the trip.';
+  if (/trip_member_must_belong/.test(text)) return 'This selection or older invitation requires household membership. Ask an organiser to create a new trip invitation with Invite a friend.';
   if (/forbidden|permission denied/.test(text)) return 'You do not have access to this household or trip. Try refreshing your households.';
   if (/unauthenticated/.test(text) || ['28000', 'PGRST301', 'PGRST303'].includes(errorCode(error))) return 'Your session has ended. Sign in again to continue.';
   if (/invalid_split/.test(text)) return 'Choose who shares the expense and make sure their amounts add up to the total.';

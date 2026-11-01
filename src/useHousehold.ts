@@ -22,7 +22,7 @@ export function useHousehold(userId:string,preferred:string) {
    let remembered='';try{remembered=localStorage.getItem(preferenceKey)??'';}catch{/* Optional preference. */}
    const id=[prefer,preferredRef.current,current.current,remembered].find(id=>id&&next.some(g=>g.id===id))??next.find(g=>g.kind==='household'&&!g.archived_at)?.id??next[0]?.id??'';
    setGroups(next);setLoaded(true);setGroupError('');if(current.current!==id)selectGroup(id);
-   if(prefer&&!next.some(g=>g.id===prefer)){setGroupError('Saved, but your household has not loaded yet. Refresh to try again.');return false;}
+   if(prefer&&!next.some(g=>g.id===prefer)){setGroupError('Saved, but your household or trip has not loaded yet. Refresh to try again.');return false;}
    return true;
   }catch(e){if(request===groupRequest.current){setGroupError(message(e));if(accessError(e)){setGroups([]);setData(null);}}return false;}
  },[preferenceKey,selectGroup]);
