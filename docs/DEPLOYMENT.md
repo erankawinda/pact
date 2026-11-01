@@ -30,6 +30,7 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 7. [`20261011083914_transaction_notifications.sql`](../supabase/migrations/20261011083914_transaction_notifications.sql) — adds private preferences, session-bound device subscriptions and the transaction outbox.
 8. [`20261011083917_private_profile_photos.sql`](../supabase/migrations/20261011083917_private_profile_photos.sql) — adds the private photo bucket and server-only lifecycle operations.
 9. [`20261011085233_notification_relationship_indexes.sql`](../supabase/migrations/20261011085233_notification_relationship_indexes.sql) — adds indexes for notification cleanup and device revocation.
+10. [`20261101014329_direct_trip_invitations.sql`](../supabase/migrations/20261101014329_direct_trip_invitations.sql) — adds direct trip invitations while preserving existing household-bound memberships and optional-service access rules.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 

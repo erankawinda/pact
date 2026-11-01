@@ -18,9 +18,11 @@ Pact is a personal project built around the practical friction of living with ot
 
 ## Planned product work
 
-The current [preview.6 release](RELEASE-0.4.0-PREVIEW.6.md) includes recipient-recorded repayments, personal approval preferences, the minimal lime appearance, a redesigned account page and private photos with deletion before replacement. The [preview.5 notification service](RELEASE-0.4.0-PREVIEW.5.md) has hosted staging evidence but remains disabled in production; real phone delivery is unverified.
+The current [preview.7 release](RELEASE-0.4.0-PREVIEW.7.md) includes direct trip invitations, recipient-recorded repayments, personal approval preferences, the minimal lime appearance, a redesigned account page and private photos with deletion before replacement. The [preview.5 notification service](RELEASE-0.4.0-PREVIEW.5.md) has hosted staging evidence but remains disabled in production; real phone delivery is unverified.
 
 Before extending these features, validate phone delivery, rehearse recovery from interrupted photo operations and document routine private Storage cleanup. Keep notification categories limited to changes involving the recipient; add reminders only with a separate explicit opt-in.
+
+Direct trip invitations are included in preview.7; see [its scope and validation status](TRIP-INVITATIONS.md). A reusable private Friends list is a possible follow-up, with acceptance and per-group access kept separate.
 
 The next product priorities are:
 

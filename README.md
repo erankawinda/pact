@@ -10,7 +10,7 @@ Pact brings those small decisions together: record what happened, choose who sha
 
 Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with warm-white and charcoal themes, lime accents, clear balances and a floating navigation bar.
 
-**Current release: [0.4.0-preview.6](docs/RELEASE-0.4.0-PREVIEW.6.md).** The production frontend and private photo backend were verified on **11 October 2026**. Transaction notifications remain an optional staging feature; delivery to a real phone is not yet verified.
+**Current production preview: [0.4.0-preview.7](docs/RELEASE-0.4.0-PREVIEW.7.md).** The frontend and direct-trip-invitation database upgrade were verified on **1 November 2026**. Photos remain enabled; transaction notifications remain disabled and delivery to a real phone is unverified.
 
 [Set up a development copy](docs/DEPLOYMENT.md) · [Architecture](docs/ARCHITECTURE.md) · [Verification status](docs/STATUS.md) · [Roadmap](docs/ROADMAP.md)
 
@@ -52,7 +52,7 @@ Matching phone-sized previews of the current interface. All people and transacti
 | Shared expenses | Choose the payer and participants, split equally or enter exact shares, and calculate missing amounts before reviewing. |
 | Balances and repayments | Record **I paid** or **I received**. New repayments settle automatically by default; each recipient can require approval for future incoming reports. |
 | Shared shopping | Add quantities, claim an item, record partial purchases and turn purchases into expenses. |
-| Households and trips | Invite people with Google sign-in, manage membership and keep selected trip participants and costs separate. |
+| Households and trips | Invite friends directly to one trip with Google sign-in, without adding them to the household; keep participants and costs separate. |
 | Personal profiles | Edit your display name, add a private photo and choose System, Light or Dark appearance on each browser. |
 | Corrections and history | Correct or void expenses, record refunds and reverse confirmed repayments while retaining history. |
 | Exports and recovery | Export the group ledger as CSV/JSON, retain drafts and reconcile an interrupted save without recording it twice. |
@@ -62,6 +62,12 @@ Matching phone-sized previews of the current interface. All people and transacti
 Profile photos are visible only to the owner and current members of a shared household or trip. The original stays on the device: Pact prepares a square preview and uploads a processed JPEG of at most **512 × 512 pixels / 256 KiB**. A saved photo must be deleted before adding a replacement. See the [photo guide](supabase/functions/profile-photo/README.md) for access rules, limits and recovery.
 
 **In staging:** opt-in transaction notifications for involved recipients, with category choices and Friendly/Brief tone. Lock-screen text excludes names and amounts. This code is included but disabled in the current production build; [server setup and real-device validation](docs/DEPLOYMENT.md#upgrade-to-040-preview5) are separate steps.
+
+## Inviting friends to a trip
+
+Open **People & trips → Invite a friend** inside the selected trip. Enter a friend's Google email and share the personal link. They can join that trip with a new or existing Pact account without joining its linked household. Trip organisers can still add existing household members separately.
+
+There is no global Friends list or contact directory. Each group has its own participants, permissions and ledger; being in one group grants no access to another. See [trip invitations and access](docs/TRIP-INVITATIONS.md) for the user flow, compatibility rules and rollout checks.
 
 ## Run locally
 
@@ -96,7 +102,7 @@ npm run test:notifications-browser
 
 `check` runs the public privacy gate, Node tests, TypeScript and the production build. Database tests apply the actual migrations in disposable PGlite databases. Browser tests use fictional accounts, intercept external traffic and run accessibility checks with axe.
 
-The preview.6 source passed **61 Node tests, 41 browser scenarios and 7 notification-worker runtime tests** in [GitHub Actions](https://github.com/erankawinda/pact/actions/runs/38130776233). CI also checks both Edge Function entrypoints. See [QA instructions](qa/README.md) and the [worker guide](supabase/functions/dispatch-notifications/README.md) to reproduce these checks.
+The preview.7 application source passed **71 Node tests, 42 browser scenarios and 7 notification-worker runtime tests** in [GitHub Actions](https://github.com/erankawinda/pact/actions/runs/41263402537). CI also checks both Edge Function entrypoints. See [QA instructions](qa/README.md) and the [worker guide](supabase/functions/dispatch-notifications/README.md) to reproduce these checks.
 
 Hosted staging validated photo processing, access control, upload/read/delete and cleanup. Production files match the reviewed release bundle. These checks do not certify a real production-account photo upload, native phone notifications, screen-reader use, concurrent database sessions or backup restoration. Independent two-account acceptance was skipped for the earlier preview.2 release. See the dated [verification record](docs/STATUS.md).
 
@@ -113,7 +119,7 @@ docs/                   Architecture, setup, releases, screenshots and roadmap
 .github/workflows/      Automated verification
 ```
 
-Amounts are stored as integer cents. The database enforces household access; request identifiers make supported writes safe to retry. Private photos use authenticated server access. The optional push worker adds no offline transaction queue or page cache. The app currently uses AUD and Melbourne time.
+Amounts are stored as integer cents. The database enforces household and trip access; request identifiers make supported writes safe to retry. Private photos use authenticated server access. The optional push worker adds no offline transaction queue or page cache. The app currently uses AUD and Melbourne time.
 
 ## Contributing and privacy
 

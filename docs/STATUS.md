@@ -1,10 +1,14 @@
 # Project status
 
-Pact **0.4.0-preview.6** was verified in production on **11 October 2026**. All nine served static files matched the reviewed release package. The photo backend was installed and checked before that upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
+Pact **0.4.0-preview.7** was verified in production on **1 November 2026**. All nine served static files matched the reviewed release package. The direct-trip-invitation database upgrade passed compatibility and post-installation checks before the frontend upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
 
-## Current profile release
+## Trip invitation rollout: 0.4.0-preview.7
 
-**0.4.0-preview.6** is the current production frontend. Photos are enabled; transaction notifications remain disabled. The deployment contains the reviewed account redesign and photo controls. A real production-account upload remains unverified.
+Direct email-bound invitations let a new or existing Pact user join only the selected trip. Existing household-linked memberships keep their access rules. The interface separates **Invite a friend** from the existing household-member picker, and a guest organiser cannot load the household directory. See [scope, checks and rollout requirements](TRIP-INVITATIONS.md). Local verification passed 71 Node tests and 42 browser scenarios. The staging migration and rollback-only hosted smoke test passed with no test users/groups retained. The production database upgrade passed read-only checks on 1 November 2026: all 12 relevant function definitions, 36 columns and 27 constraints match tested source, with restricted grants and RLS preserved. The production frontend was published and all nine served files matched the reviewed package. [GitHub Actions passed on application commit `7bfcb05`](https://github.com/erankawinda/pact/actions/runs/41263402537), including 71 Node tests, 42 browser scenarios, both Edge Function checks and seven worker runtime tests.
+
+## Previous profile rollout: 0.4.0-preview.6
+
+Preview.6 introduced the account redesign and photo controls retained in preview.7. The following records its 11 October verification; a real production-account photo upload remains unverified. Photos remain enabled and transaction notifications remain disabled.
 
 The account page now groups a larger avatar, display name and actual membership role in one identity card, followed by appearance/payment settings and private sign-in details. Photo controls support choosing a file, local preview, saving, deletion before replacement and recoverable errors. This interface preserves the existing permissions, ledger operations and photo-processing limits.
 
