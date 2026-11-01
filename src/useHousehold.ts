@@ -30,10 +30,11 @@ export function useHousehold(userId:string,preferred:string) {
   const request=++dataRequest.current;
   if(!id){setData(null);return;}
   try{
-   const next=await rpc<Snapshot>('get_household_state',{p_group:id,p_limit:limit.current});
+   const next=await rpc<Snapshot>('get_group_state_v4',{p_group:id,p_limit:limit.current});
+   if(next.schema_version!==4||!next.my_participant_id||!next.members.some(member=>member.id===next.my_participant_id&&member.auth_user_id===userId&&member.status==='active'))throw new Error('This version could not load your place in the group. Refresh Pact and try again.');
    if(request===dataRequest.current&&current.current===id){setData({id,value:next});setDataError('');setLastUpdated(Date.now());}
   }catch(e){if(request===dataRequest.current&&current.current===id){if(accessError(e))setData(null);setDataError(message(e));}}
- },[]);
+ },[userId]);
  const refresh=useCallback(()=>{
   if(refreshFlight.current){refreshQueued.current=true;return refreshFlight.current;}
   setRefreshing(true);

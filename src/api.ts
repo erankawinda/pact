@@ -3,14 +3,16 @@ import {captureInvite} from './invitations';
 import {disableDeviceNotifications} from './notifications';
 export {message} from './errors';
 export type Group = {id:string;name:string;kind:'household'|'trip';archived_at:string|null;parent_household_id:string|null};
-export type Member = {id:string;name:string;role:'organiser'|'member';status:'active'|'revoked';require_payment_approval:boolean};
+// A ledger participant is not an authenticated account. An invited person's
+// stable id can already appear in expenses while auth_user_id remains null.
+export type Member = {id:string;auth_user_id:string|null;name:string;role:'organiser'|'member';status:'active'|'revoked'|'invited'|'expired';can_select:boolean;can_repay:boolean;require_payment_approval:boolean};
 export type Expense = {id:string;description:string;amount_cents:number;cash_actor_id:string;occurred_on:string;category:string;note:string;status:string;created_by:string;split_mode:string;version:number;replaces_id:string|null;correction_reason:string};
 export type ShoppingItem = {id:string;name:string;quantity:number;remaining:number;unit:string;note:string;urgent:boolean;status:'needed'|'bought'|'removed';claimed_by:string|null;created_by:string;version:number};
 export type Purchase = {id:string;item_id:string;quantity:number;created_by:string;created_at:string;expense_id:string|null;undone_at:string|null};
 export type Payment = {id:string;sender_id:string;recipient_id:string;recorded_by:string;confirmation_method:'recipient'|'automatic'|null;amount_cents:number;occurred_on:string;note:string;status:'pending'|'confirmed'|'rejected'|'cancelled'|'reversed';version:number;reason:string};
 export type Refund = {id:string;expense_id:string;amount_cents:number;reason:string;status:'posted'|'voided';created_by:string;created_at:string};
 export type Activity = {id:string;actor_id:string;action:string;entity_id:string;occurred_at:string;after_data:Record<string,unknown>};
-export type Snapshot = {members:Member[];expenses:Expense[];shares:{expense_id:string;user_id:string;share_cents:number}[];balances:{user_id:string;cents:number}[];shopping:ShoppingItem[];purchases:Purchase[];payments:Payment[];refunds:Refund[];refund_shares:{refund_id:string;user_id:string;share_cents:number}[];activity:Activity[];invitations:{id:string;intended_email:string;expires_at:string}[];expense_count:number};
+export type Snapshot = {schema_version:4;my_participant_id:string;members:Member[];expenses:Expense[];shares:{expense_id:string;user_id:string;share_cents:number}[];balances:{user_id:string;cents:number}[];shopping:ShoppingItem[];purchases:Purchase[];payments:Payment[];refunds:Refund[];refund_shares:{refund_id:string;user_id:string;share_cents:number}[];activity:Activity[];invitations:{id:string;intended_email:string;expires_at:string}[];expense_count:number};
 export type ExpenseInput = {p_group:string;p_request:string;p_description:string;p_amount:number;p_payer:string;p_people:string[];p_mode:'equal'|'exact';p_exact:Record<string,number>|null;p_date:string;p_category:string;p_note:string};
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;

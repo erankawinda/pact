@@ -4,6 +4,13 @@ export function errorCode(error: unknown): string {
 
 export function message(error: unknown): string {
   const text = error && typeof error === 'object' && 'message' in error ? String(error.message) : '';
+  if (/participant_conflict/.test(text)) return 'Your account already has a separate place in this group. Ask an organiser to review the records before joining. Pact has not combined any amounts.';
+  if (/participant_already_joined/.test(text)) return 'This person has already joined this group. Choose them from the existing people list.';
+  if (/participant_invitation_required/.test(text)) return 'This person already has a place waiting in this group. They need to accept their personal invitation so their earlier records stay together.';
+  if (/invalid_participant/.test(text)) return 'Enter their name and the Google email they will use to join.';
+  if (/invitation_replaced/.test(text)) return 'That invitation has expired or been replaced. Check People before creating another invitation for the same email.';
+  if (/invitation_preview_changed/.test(text)) return 'The records changed while you were reviewing. Check the latest summary before joining.';
+  if (/invitation_review_required|update_required/.test(text)) return 'Refresh Pact to use the latest version and review these records safely.';
   if (/invalid_invitation/.test(text)) return 'This invitation does not match this account, or the link has expired. Switch Google account or ask for a new link.';
   if (/stale_version/.test(text)) return 'Someone changed this already. Refresh to see the latest version before trying again.';
   if (/already_needed/.test(text)) return 'This item is already on the shopping list. Check the existing request.';
@@ -23,7 +30,7 @@ export function message(error: unknown): string {
   if (/forbidden|permission denied/.test(text)) return 'You do not have access to this household or trip. Try refreshing your households.';
   if (/unauthenticated/.test(text) || ['28000', 'PGRST301', 'PGRST303'].includes(errorCode(error))) return 'Your session has ended. Sign in again to continue.';
   if (/invalid_split/.test(text)) return 'Choose who shares the expense and make sure their amounts add up to the total.';
-  if (/invalid_payer/.test(text)) return 'The payer needs to be a current member. Refresh and choose them again.';
+  if (/invalid_payer/.test(text)) return 'Choose a current member or someone with an active invitation as the payer. Refresh the people list and try again.';
   if (/invalid_amount/.test(text)) return 'Enter an amount between $0.01 and $1,000,000.';
   if (/invalid_email/.test(text)) return 'Enter a valid Google email address.';
   if (/invalid_parent/.test(text)) return 'Choose a household for this trip.';

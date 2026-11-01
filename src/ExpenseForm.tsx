@@ -4,12 +4,16 @@ import {authError, definitelyRejected, message} from './errors';
 import {displayDate, money, parseMoney, planCustomSplit, splitEqual, today} from './money';
 import {clearPending, readPending, rememberPending, type PendingExpense} from './pendingExpense';
 import {Alert, Avatar, FormHeader, Icon, moveToTop} from './ui';
+import {IncludePersonForm} from './IncludePersonForm';
+import {isOrganiser,participantPhotoId,participantState} from './participants';
 
 type Draft = {description:string;amount:string;payer:string;people:string[];mode:'equal'|'exact';exact:Record<string,string>;date:string;category:string;note:string;reason:string;splitRemaining?:boolean};
-export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, initial, purchaseId, purchaseName}: {
-  group: Group; snapshot: Snapshot; userId: string; online: boolean; onBack: () => void; onSaved: () => void;
+export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, refreshPeople, initial, purchaseId, purchaseName}: {
+  group: Group; snapshot: Snapshot; userId: string; online: boolean; onBack: () => void; onSaved: () => void; refreshPeople:()=>Promise<void>;
   initial?:Expense; purchaseId?:string; purchaseName?:string;
 }) {
+  const myId=snapshot.my_participant_id;
+  const [including,setIncluding]=useState(false),[newParticipant,setNewParticipant]=useState('');
   const draftKey = `pact:draft:${userId}:${group.id}:${initial?.id ?? purchaseId ?? 'new'}`;
   const [recovery] = useState(() => {
     try { return {value: readPending(userId, group.id), error: ''}; }
@@ -17,7 +21,7 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
   });
   const [start] = useState(() => {
     const shares=snapshot.shares.filter(s=>s.expense_id===initial?.id);
-    const base:Draft={description:initial?.description??purchaseName??'',amount:initial?(initial.amount_cents/100).toFixed(2):'',payer:initial?.cash_actor_id??userId,people:shares.map(s=>s.user_id),mode:initial?.split_mode==='exact'?'exact':'equal',exact:Object.fromEntries(shares.map(s=>[s.user_id,(s.share_cents/100).toFixed(2)])),date:initial?.occurred_on??today(),category:initial?.category??(group.kind==='trip'?'travel':'groceries'),note:initial?.note??'',reason:''};
+    const base:Draft={description:initial?.description??purchaseName??'',amount:initial?(initial.amount_cents/100).toFixed(2):'',payer:initial?.cash_actor_id??myId,people:shares.map(s=>s.user_id),mode:initial?.split_mode==='exact'?'exact':'equal',exact:Object.fromEntries(shares.map(s=>[s.user_id,(s.share_cents/100).toFixed(2)])),date:initial?.occurred_on??today(),category:initial?.category??(group.kind==='trip'?'travel':'groceries'),note:initial?.note??'',reason:''};
     try {
       const raw=localStorage.getItem(draftKey);
       if(raw){const d=JSON.parse(raw);if(d&&typeof d.description==='string'&&typeof d.amount==='string'&&typeof d.payer==='string'&&Array.isArray(d.people)&&d.people.every((v:unknown)=>typeof v==='string')&&['equal','exact'].includes(d.mode)&&d.exact&&typeof d.exact==='object'&&Object.values(d.exact).every(v=>typeof v==='string')&&typeof d.date==='string'&&typeof d.category==='string'&&typeof d.note==='string'&&typeof d.reason==='string')return {...base,...d} as Draft;}
@@ -47,8 +51,8 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
   const inFlight = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const initialDate = useRef(date);
-  const members = snapshot.members.filter(m => m.status === 'active');
-  const dirty = Boolean(description || amount || people.length || note || payer !== userId || date !== initialDate.current || category !== (group.kind === 'trip' ? 'travel' : 'groceries') || mode !== 'equal' || review);
+  const members = snapshot.members.filter(m => m.can_select);
+  const dirty = Boolean(description || amount || people.length || note || payer !== myId || date !== initialDate.current || category !== (group.kind === 'trip' ? 'travel' : 'groceries') || mode !== 'equal' || review);
 
   useEffect(() => {
     if(review)return;
@@ -62,9 +66,17 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
     if(people.some(id=>!allowed.has(id))||!allowed.has(payer)) {
       setPeople(old=>old.filter(id=>allowed.has(id)));
       if(!allowed.has(payer))setPayer('');
-      setMembershipNotice('The people in this household changed. Check the payer and people sharing this cost.');
+      setMembershipNotice('The people available for this expense changed. Check the payer and people sharing this cost.');
     }
   },[memberKey,review]);
+  useEffect(()=>{
+    if(!newParticipant||review)return;
+    const person=members.find(member=>member.id===newParticipant);
+    if(!person)return;
+    setPeople(old=>old.includes(person.id)?old:[...old,person.id]);
+    setMembershipNotice(`${person.name} is included in this split. Check everyone's amounts before reviewing.`);
+    setNewParticipant('');
+  },[memberKey,newParticipant,review]);
   useEffect(() => {
     if (discard) dialog.current?.showModal();
     else dialog.current?.close();
@@ -146,6 +158,7 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
     setFocusedShare(null);
     setReview(null); setError(''); moveToTop();
   }
+  if(including&&isOrganiser(snapshot,userId))return <IncludePersonForm group={group} online={online} onBack={()=>setIncluding(false)} onIncluded={async participantId=>{setNewParticipant(participantId);await refreshPeople();setIncluding(false);}}/>;
   return <section className="form-page expense-form">
     <FormHeader title={review ? 'Check your expense' : initial ? 'Correct expense' : 'Add an expense'} context={group.name} onBack={review && !uncertain ? editReview : leave} disabled={busy}/>
     {!online && <p className="callout">You’re offline. Reconnect to save or check this expense.</p>}
@@ -153,7 +166,7 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
       {uncertain && <div className="callout recovery"><div><strong>This save needs checking</strong><p>Your original details are saved on this device. Check this request to confirm or finish it safely.</p></div></div>}
       <div className="review-card"><p className="review-description">{review.input.p_description}</p><strong className="review-amount">{money(review.input.p_amount)}</strong><p className="muted">{review.names[review.input.p_payer] ?? 'Member'} paid · {displayDate(review.input.p_date)}</p></div>
       <div className="section-title"><h2>Who pays what</h2><span className="muted">{review.input.p_mode === 'equal' ? 'Equal split' : 'Custom amounts'}</span></div>
-      <div className="list-panel">{Object.entries(review.shares).map(([id, share]) => <div className="person-row" key={id}><Avatar name={review.names[id] ?? 'Member'} userId={id}/><span className="person-name">{review.names[id] ?? 'Member'}{id === userId && <small>You</small>}</span><strong>{money(share)}</strong></div>)}</div>
+      <div className="list-panel">{Object.entries(review.shares).map(([id, share]) => <div className="person-row" key={id}><Avatar name={review.names[id] ?? 'Member'} userId={participantPhotoId(snapshot.members.find(member=>member.id===id))}/><span className="person-name">{review.names[id] ?? 'Member'}{id === myId && <small>You</small>}{snapshot.members.find(member=>member.id===id)?.auth_user_id===null&&<small>Invited · not joined yet</small>}</span><strong>{money(share)}</strong></div>)}</div>
       {!review.input.p_people.includes(review.input.p_payer) && <p className="helper">The payer is not sharing this expense. The selected people cover the full amount.</p>}
       {review.input.p_note && <p className="expense-note">{review.input.p_note}</p>}
       <Alert text={error}>{needsAuth && <button onClick={()=>void reauthenticate().catch(e=>setError(message(e)))}>Sign in again</button>}</Alert>
@@ -164,7 +177,8 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
       <Alert text={storageError}/>
       <div className="amount-field"><label htmlFor="expense-amount">Amount <span className="muted">· AUD</span></label><div><span aria-hidden="true">$</span><input id="expense-amount" required inputMode="decimal" autoComplete="off" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"/></div></div>
       <label>What was it for?<input required maxLength={120} value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Groceries" autoComplete="off"/></label>
-      <label>Who paid?<select value={payer} required onChange={e => setPayer(e.target.value)}><option value="" disabled>Choose a person</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}{m.id === userId ? ' (you)' : ''}</option>)}</select></label>
+      <label>Who paid?<select value={payer} required onChange={e => setPayer(e.target.value)}><option value="" disabled>Choose a person</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}{m.id === myId ? ' (you)' : m.auth_user_id===null?' (invited)':''}</option>)}</select></label>
+      {isOrganiser(snapshot,userId)&&<div className="include-expense-person"><button className="text-button" type="button" disabled={!online||!!group.archived_at} onClick={()=>setIncluding(true)}><Icon name="plus"/>Include someone who has not joined</button><p className="helper">Keep this expense open. Add their place now and invite them to claim it.</p></div>}
       <fieldset className="split-section"><legend>Split between</legend><p className="helper">Tap everyone sharing this expense.</p>
         <div className="split-tools"><div className="segmented" role="group" aria-label="Split method"><button type="button" aria-pressed={mode === 'equal'} onClick={() => setMode('equal')}>Equally</button><button type="button" aria-pressed={mode === 'exact'} onClick={() => setMode('exact')}>Custom amounts</button></div><button className="text-button" type="button" onClick={() => setPeople(people.length === members.length ? [] : members.map(m => m.id))}>{people.length === members.length ? 'Clear' : 'Select all'}</button></div>
         {mode === 'exact' && <p className="helper" id="custom-split-help">Enter the amounts you know. One blank share is calculated automatically. Clear an amount to let Pact calculate it again.</p>}
@@ -173,7 +187,7 @@ export function ExpenseForm({group, snapshot, userId, online, onBack, onSaved, i
           const automatic = customSplit.autoIds.includes(member.id);
           const calculated = automatic ? (customSplit.shares[member.id] / 100).toFixed(2) : '';
           return <div className={`split-row ${selected ? 'selected' : ''}`} key={member.id}>
-            <label className="person-toggle"><input type="checkbox" checked={selected} onChange={e => setPeople(old => e.target.checked ? [...old, member.id] : old.filter(id => id !== member.id))}/><span className="checkbox-mark" aria-hidden="true">{selected && <Icon name="check"/>}</span><span className="person-name">{member.name}{member.id === userId && <small>You</small>}</span></label>
+            <label className="person-toggle"><input type="checkbox" checked={selected} onChange={e => setPeople(old => e.target.checked ? [...old, member.id] : old.filter(id => id !== member.id))}/><span className="checkbox-mark" aria-hidden="true">{selected && <Icon name="check"/>}</span><span className="person-name">{member.name}{member.id === myId && <small>You</small>}{member.auth_user_id===null&&<small>{participantState(member)}</small>}</span></label>
             {selected && mode === 'exact' ? <label className={`exact-input ${automatic ? 'automatic-share' : ''}`}><span className="sr-only">{member.name}'s share</span><input inputMode="decimal" autoComplete="off" aria-label={`${member.name}'s share`} aria-describedby={automatic ? `auto-share-${member.id}` : 'custom-split-help'} aria-invalid={customSplit.invalidIds.includes(member.id) || undefined} placeholder={calculated || '—'} value={automatic && focusedShare !== member.id ? calculated : exact[member.id] ?? ''} onFocus={() => setFocusedShare(member.id)} onBlur={() => setFocusedShare(null)} onChange={e => setExact(old => ({...old, [member.id]: e.target.value}))}/>{automatic && <small className="auto-share-label" id={`auto-share-${member.id}`}>Auto<span className="sr-only">: {money(customSplit.shares[member.id])}. Enter an amount to change it.</span></small>}</label> : selected && liveShares[member.id] !== undefined ? <strong className="share-amount">{money(liveShares[member.id])}</strong> : null}
           </div>;
         })}</div>
