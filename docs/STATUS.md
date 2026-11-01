@@ -2,6 +2,21 @@
 
 Pact **0.4.0-preview.7** was verified in production on **1 November 2026**. All nine served static files matched the reviewed release package. The direct-trip-invitation database upgrade passed compatibility and post-installation checks before the frontend upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
 
+## Prepared update: 0.4.0-preview.8
+
+The next update adds pending group participants and optional invitation emails. An organiser can include someone in expenses before acceptance; a matching verified account reviews its own amounts and claims the same ledger identity. See [participant behaviour](PENDING-PARTICIPANTS.md) and [email status and setup](INVITATION-EMAIL.md).
+
+Verified on 1 November 2026:
+
+- Public-source privacy checks, 100 Node tests, TypeScript and the production build passed.
+- All 50 isolated browser scenarios passed: 27 core, nine photo/account, nine notification and five invitation-email scenarios. The new invitation screens passed mobile layout and accessibility checks; email transport and native push APIs are simulated.
+- All 19 invitation-email worker runtime tests passed. The staging worker is deployed with gateway JWT verification and rejects unauthenticated requests with 401. Sender configuration remains disabled; no automatic provider email was sent by these checks.
+- The three new database migrations passed in staging. The rollback-only hosted smoke test passed; no synthetic users or groups remained. All 36 inspected function definitions match source, with restricted grants and participant foreign keys verified.
+- Existing financial rows keep their IDs and cents. Claiming changes the account binding and membership, not the ledger. Production compatibility was inspected without mutation, including already-installed repayment modules absent from migration history.
+- Hosted advisors reported no new schema security warning. Deliberately inaccessible tables have informational RLS/no-policy notices; the existing password-protection warning remains.
+
+**Not yet live:** production remains preview.7. Domain selection, verified sender setup, controlled email acceptance and production rollout are outstanding. No paid plan, add-on or overage setting was enabled. A new domain's registration is separate from email hosting. Independent-connection races, actual inbox arrival and native phone delivery remain unverified.
+
 ## Trip invitation rollout: 0.4.0-preview.7
 
 Direct email-bound invitations let a new or existing Pact user join only the selected trip. Existing household-linked memberships keep their access rules. The interface separates **Invite a friend** from the existing household-member picker, and a guest organiser cannot load the household directory. See [scope, checks and rollout requirements](TRIP-INVITATIONS.md). Local verification passed 71 Node tests and 42 browser scenarios. The staging migration and rollback-only hosted smoke test passed with no test users/groups retained. The production database upgrade passed read-only checks on 1 November 2026: all 12 relevant function definitions, 36 columns and 27 constraints match tested source, with restricted grants and RLS preserved. The production frontend was published and all nine served files matched the reviewed package. [GitHub Actions passed on application commit `7bfcb05`](https://github.com/erankawinda/pact/actions/runs/41263402537), including 71 Node tests, 42 browser scenarios, both Edge Function checks and seven worker runtime tests.

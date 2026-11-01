@@ -24,6 +24,8 @@ Before extending these features, validate phone delivery, rehearse recovery from
 
 Direct trip invitations are included in preview.7; see [its scope and validation status](TRIP-INVITATIONS.md). A reusable private Friends list is a possible follow-up, with acceptance and per-group access kept separate.
 
+The next source update adds [include now, join later](PENDING-PARTICIPANTS.md) and optional [invitation email](INVITATION-EMAIL.md). Its database has passed hosted staging validation. Production rollout and verified sender setup remain separate gates; links continue to work with mail disabled. A contact correction or explicit identity-conflict resolution flow is a later follow-up.
+
 The next product priorities are:
 
 - A simple view of enabled notification devices, including a way to revoke an unavailable old device.

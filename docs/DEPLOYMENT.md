@@ -13,7 +13,7 @@ npm run check
 
 `check` runs the public privacy gate, Node test suite, TypeScript validation and a Vite build. These checks use disposable local database fixtures and do not require a hosted Supabase project. A successful build without environment variables does not create a connected app.
 
-Run `npm run test:browser`, `npm run test:privacy-browser` and `npm run test:notifications-browser` for the three isolated browser/accessibility suites. See [qa/README.md](../qa/README.md) for Chromium installation, coverage and generated artifacts. The notification worker also has [separate Deno checks](../supabase/functions/dispatch-notifications/README.md#deploy-to-staging-first).
+Run `npm run test:browser`, `npm run test:privacy-browser`, `npm run test:notifications-browser` and `npm run test:invitations-browser` for the four isolated browser/accessibility suites. See [qa/README.md](../qa/README.md) for Chromium installation, coverage and generated artifacts. The notification worker also has [separate Deno checks](../supabase/functions/dispatch-notifications/README.md#deploy-to-staging-first).
 
 ## 2. Create a development backend
 
@@ -31,6 +31,9 @@ In that project's SQL Editor, run the full contents of each file once, in this o
 8. [`20261011083917_private_profile_photos.sql`](../supabase/migrations/20261011083917_private_profile_photos.sql) — adds the private photo bucket and server-only lifecycle operations.
 9. [`20261011085233_notification_relationship_indexes.sql`](../supabase/migrations/20261011085233_notification_relationship_indexes.sql) — adds indexes for notification cleanup and device revocation.
 10. [`20261101014329_direct_trip_invitations.sql`](../supabase/migrations/20261101014329_direct_trip_invitations.sql) — adds direct trip invitations while preserving existing household-bound memberships and optional-service access rules.
+11. [`20261101030742_invitation_email_delivery.sql`](../supabase/migrations/20261101030742_invitation_email_delivery.sql) — adds private delivery receipts and bounded email retries; does not enable email sending.
+12. [`20261101031522_pending_group_participants.sql`](../supabase/migrations/20261101031522_pending_group_participants.sql) — separates ledger participants from accounts and adds reviewed invitation claiming.
+13. [`20261101031706_participant_notification_compatibility.sql`](../supabase/migrations/20261101031706_participant_notification_compatibility.sql) — maps participant events to joined accounts if the optional notification module is installed.
 
 Stop if any file fails. These are versioned migrations, not scripts to rerun on an existing schema. They create tables, access policies, validated operations and Realtime publication entries where the hosted publication exists.
 
@@ -61,6 +64,7 @@ Leave the new feature flags disabled until their matching server setup passes va
 VITE_PROFILE_PHOTOS_ENABLED=false
 VITE_NOTIFICATIONS_ENABLED=false
 VITE_WEB_PUSH_PUBLIC_KEY=
+VITE_INVITATION_EMAIL_ENABLED=false
 ```
 
 For an environment with a validated photo service, set `VITE_PROFILE_PHOTOS_ENABLED=true`. For notifications, also set `VITE_NOTIFICATIONS_ENABLED=true` and supply that environment's VAPID **public** key. These are build-time settings; changing them requires rebuilding the static site. See the [photo-only upgrade](#upgrade-to-040-preview6-with-photos-only) or [notification setup](#upgrade-to-040-preview5).
@@ -107,6 +111,16 @@ Keep simulated transactions in a separate development environment. A short check
 Optional physical-device checks cover decimal keyboards, enlarged text, screen-reader navigation and Home Screen installation. Record which checks actually ran. A skipped check remains unverified, even when a release proceeds.
 
 A frontend rollback does not reverse database migrations. Before changing stored-data behaviour, test the migration separately, preserve compatibility with open older clients, and establish a database backup and restore procedure. Pact's CSV/JSON exports are not full backups.
+
+## Next update: invitations and pending participants
+
+The source update has passed hosted staging database checks. Production remains preview.7 until the matching upgrade is published. Apply only migrations 11–13 above to an inspected, compatible preview.7 backend; do not replay optional migrations merely because manually applied versions are absent from the CLI history.
+
+Validate [the rollback-only staging smoke test](../tests/pending-participants-hosted.sql), function definitions, grants and zero remaining fixtures. Existing financial rows keep their IDs and amounts. Older clients must refresh before using groups with new participant identities; rolling back to an incompatible frontend is not a recovery method. Keep a compatible build available.
+
+Pending participants work with manual link sharing. Automatic mail is independently gated by `VITE_INVITATION_EMAIL_ENABLED=false` and the worker's `INVITATION_EMAIL_ENABLED` switch. Follow the [invitation email guide](INVITATION-EMAIL.md) to verify a sender, configure a domain-restricted server key and fixed app origin, deploy with JWT checking, and run a controlled acceptance test before enabling it. Provider acceptance does not establish inbox arrival. No plan upgrade, paid add-on or automatic overage setting is required by this implementation; check the existing provider account's domain and sending allowance before setup. Registering a new domain is a separate cost.
+
+Keep existing photo settings and notification flags. If the notification module is absent, the compatibility migration does not install it. If installed later, restore participant compatibility before enabling delivery. See [participant identity and rollout details](PENDING-PARTICIPANTS.md).
 
 ## Upgrade to 0.4.0-preview.6 with photos only
 

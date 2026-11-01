@@ -12,6 +12,8 @@ Built with **React, TypeScript, Vite and Supabase**. Designed for phones, with w
 
 **Current production preview: [0.4.0-preview.7](docs/RELEASE-0.4.0-PREVIEW.7.md).** The frontend and direct-trip-invitation database upgrade were verified on **1 November 2026**. Photos remain enabled; transaction notifications remain disabled and delivery to a real phone is unverified.
 
+**[0.4.0-preview.8, prepared in source](docs/RELEASE-0.4.0-PREVIEW.8.md):** [include now, join later](docs/PENDING-PARTICIPANTS.md) lets an organiser record someone's share before they join, then connects those records to their verified account. Optional [invitation emails](docs/INVITATION-EMAIL.md) add sending status and safe retries. These changes are not yet released to production; email remains disabled until sender setup and acceptance checks are complete.
+
 [Set up a development copy](docs/DEPLOYMENT.md) · [Architecture](docs/ARCHITECTURE.md) · [Verification status](docs/STATUS.md) · [Roadmap](docs/ROADMAP.md)
 
 ## A look inside
@@ -69,6 +71,12 @@ Open **People & trips → Invite a friend** inside the selected trip. Enter a fr
 
 There is no global Friends list or contact directory. Each group has its own participants, permissions and ledger; being in one group grants no access to another. See [trip invitations and access](docs/TRIP-INVITATIONS.md) for the user flow, compatibility rules and rollout checks.
 
+### Include now, join later — next update
+
+An organiser can choose **Include someone** in People or inside an unfinished expense. Their invited place can pay or share an expense immediately. When they sign in with the matching Google account, they review their own recorded amounts before joining. Acceptance connects their profile to the same records without changing a cent or who entered them; joining does not approve earlier charges.
+
+Repayments wait until both people have joined. Expired invitations retain their history and can be replaced without creating duplicate people. See the [participant guide](docs/PENDING-PARTICIPANTS.md) for access rules and rollout status.
+
 ## Run locally
 
 Use Node.js **22.12 or later** (`.nvmrc` selects Node 22).
@@ -98,11 +106,12 @@ npx playwright install chromium
 npm run test:browser
 npm run test:privacy-browser
 npm run test:notifications-browser
+npm run test:invitations-browser
 ```
 
 `check` runs the public privacy gate, Node tests, TypeScript and the production build. Database tests apply the actual migrations in disposable PGlite databases. Browser tests use fictional accounts, intercept external traffic and run accessibility checks with axe.
 
-The preview.7 application source passed **71 Node tests, 42 browser scenarios and 7 notification-worker runtime tests** in [GitHub Actions](https://github.com/erankawinda/pact/actions/runs/41263402537). CI also checks both Edge Function entrypoints. See [QA instructions](qa/README.md) and the [worker guide](supabase/functions/dispatch-notifications/README.md) to reproduce these checks.
+The preview.7 application source passed **71 Node tests, 42 browser scenarios and 7 notification-worker runtime tests** in [GitHub Actions](https://github.com/erankawinda/pact/actions/runs/41263402537). That release checked both existing Edge Function entrypoints. The next source update passes 100 Node tests, 50 isolated browser scenarios and 19 invitation-email worker tests; its hosted staging database checks also passed. See [QA instructions](qa/README.md) and the [worker guide](supabase/functions/dispatch-notifications/README.md) to reproduce these checks.
 
 Hosted staging validated photo processing, access control, upload/read/delete and cleanup. Production files match the reviewed release bundle. These checks do not certify a real production-account photo upload, native phone notifications, screen-reader use, concurrent database sessions or backup restoration. Independent two-account acceptance was skipped for the earlier preview.2 release. See the dated [verification record](docs/STATUS.md).
 
@@ -112,7 +121,7 @@ Hosted staging validated photo processing, access control, upload/read/delete an
 src/                    React screens, profiles, navigation, sync and money helpers
 public/                 App icons, web manifest, push worker and hosting headers
 supabase/migrations/    Schema, access rules and validated database operations
-supabase/functions/     Private photo service and notification dispatcher
+supabase/functions/     Private photo, invitation email and notification services
 tests/                  Money, workflow, database, privacy and service tests
 qa/                     Isolated browser and accessibility checks
 docs/                   Architecture, setup, releases, screenshots and roadmap
