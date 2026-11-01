@@ -342,6 +342,10 @@ details[open] > summary .expense-total svg { transform: rotate(180deg); }
 .stack-actions { display: grid; gap: 12px; margin: 26px 0; }
 .member-card { border-bottom: 1px solid var(--line); }
 .member-card:last-child { border: 0; }
+.participant-badge { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: .6875rem; color: var(--accent); background: var(--tint); }
+.include-person-prompt .eyebrow { margin-bottom: 8px; }
+.include-expense-person { margin: -4px 0 24px; }
+.include-expense-person .helper { margin: 4px 0 0; }
 .member-card .person-row { border: 0; }
 .member-actions { margin: 0 0 14px 48px; }
 .member-actions summary { font-weight: 400; font-size: .8125rem; color: var(--muted); }

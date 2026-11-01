@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 const manifestPath='scripts/reviewed-public-assets.json';
 const email=/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const credential=/(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[A-Za-z0-9_-]{30,}|GOCSPX-[A-Za-z0-9_-]{15,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----)/g;
+const credential=/(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|\bre_[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,}|GOCSPX-[A-Za-z0-9_-]{15,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----)/g;
 const jwt=/\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\b/g;
 const hostedProject=/\b(?:https?|wss):\/\/[a-z0-9]{20}\.supabase\.co\b/gi;
 const configuredSite=/\bhttps?:\/\/(?!YOUR_PROJECT\.|example\.)[a-z0-9-]+\.pages\.dev\b/gi;

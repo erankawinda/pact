@@ -227,7 +227,7 @@ export function Profile({userId, initialName, group, snapshot, online, onSaved}:
     });
   }
 
-  const membership = snapshot?.members.find(member => member.id === userId && member.status === 'active');
+  const membership = snapshot?.members.find(member => member.auth_user_id === userId && member.status === 'active');
   const displayName = savedName ?? initialName ?? 'Your profile';
   return <section className="account-profile-card" aria-labelledby="profile-heading">
     <h2 id="profile-heading" className="sr-only">Your profile</h2>

@@ -10,7 +10,7 @@ const host='http://127.0.0.1:4190',fixtureUrl='https://pact-fixture.supabase.co'
 const actor='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002';
 const eventId='00000000-0000-4000-8000-000000000003';
 const vapid=Buffer.from([4,...new Array(64).fill(1)]).toString('base64url');
-const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureUrl),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only'),'import.meta.env.VITE_PROFILE_PHOTOS_ENABLED':'"false"','import.meta.env.VITE_NOTIFICATIONS_ENABLED':'"true"','import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY':JSON.stringify(vapid)},server:{host:'127.0.0.1',port:4190,strictPort:true}});await server.listen();
+const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureUrl),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only'),'import.meta.env.VITE_PROFILE_PHOTOS_ENABLED':'"false"','import.meta.env.VITE_NOTIFICATIONS_ENABLED':'"true"','import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY':JSON.stringify(vapid),'import.meta.env.VITE_INVITATION_EMAIL_ENABLED':'"false"'},server:{host:'127.0.0.1',port:4190,strictPort:true}});await server.listen();
 const browser=await chromium.launch({...(process.env.PACT_CHROMIUM_PATH?{executablePath:process.env.PACT_CHROMIUM_PATH}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
 const results=[];mkdirSync('qa/artifacts',{recursive:true});
 async function test(name,run){const start=Date.now();try{await run();results.push({name,status:'passed',ms:Date.now()-start});console.log('PASS '+name);}catch(error){results.push({name,status:'failed',error:String(error)});throw error;}finally{writeFileSync('qa/artifacts/notifications-browser-results.json',JSON.stringify(results,null,2));}}
@@ -51,7 +51,7 @@ async function fixture({permission='default',permissionResult='granted',unsuppor
   if(name==='get_push_subscription')return respond({enabled:state.enabled});
   if(name==='register_push_subscription'){state.enabled=true;return respond({enabled:true});}
   if(name==='revoke_push_subscription'){state.enabled=false;return respond(null);}
-  if(name==='get_payment_preferences')return respond({require_payment_approval:false});
+  if(name==='get_payment_preferences')return respond(false);
   if(name==='send_test_notification')return respond(eventId);
   if(name==='resolve_notification')return respond(state.navigation);
   state.unexpected.push(name);return route.abort();

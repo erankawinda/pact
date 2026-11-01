@@ -1,6 +1,8 @@
 # Architecture
 
-Pact keeps the interface in a static React application and the shared records and permissions in PostgreSQL. Private profile photos and optional transaction notifications use narrowly scoped Supabase Edge Functions. The frontend is still deployed as static files.
+Pact keeps the interface in a static React application and the shared records and permissions in PostgreSQL. Private profile photos, optional transaction notifications and optional invitation emails use narrowly scoped Supabase Edge Functions. The frontend is still deployed as static files.
+
+This document describes the source, including the prepared pending-participant and invitation-email changes. Production remains preview.7; these new capabilities are not confirmed live. Invitation email remains disabled until verified sender configuration and acceptance checks are complete. See [STATUS.md](STATUS.md) for dated deployment evidence.
 
 ```mermaid
 flowchart LR
@@ -11,6 +13,9 @@ flowchart LR
     RT -->|Refresh household snapshot| Browser
     Browser <--> Local[Browser draft and recovery storage]
     Browser -->|Authenticated photo requests| Photo[Photo Edge Function]
+    Browser -->|Personal token and authenticated request| Mail[Optional invitation-email function]
+    Mail -->|Permission check and immutable delivery receipt| DB
+    Mail -->|Idempotent invitation submission| Provider[Email provider]
     Photo -->|Access and lifecycle checks| DB
     Photo -->|Processed JPEG only| Storage[Private Storage]
     DB -->|Committed participant events| Outbox[Private notification outbox]
@@ -34,6 +39,8 @@ flowchart LR
 | `src/pendingExpense.ts`, `src/useMutation.ts` | Store a request before sending; retry the same operation after an uncertain response |
 | `src/Shopping.tsx`, `src/HouseholdViews.tsx` | Shared shopping, expense history, balances and repayments |
 | `src/Management.tsx`, `src/GroupForms.tsx`, `src/invitations.ts` | Households, trips, invitations and member administration |
+| `src/IncludePersonForm.tsx`, `src/participants.ts` | Include people before joining; separate ledger identities from accounts |
+| `src/invitationEmail.ts`, `supabase/functions/invitation-email/` | Optional email submission, frozen message metadata and safe status/retry handling |
 | `src/export.ts` | CSV and JSON group exports |
 | `supabase/migrations/` | Schema, row-level access rules, RPCs and financial invariants |
 | `tests/`, `qa/` | Unit/database tests and isolated browser scenarios |
@@ -44,9 +51,17 @@ A group is either a household or a trip under a household. Membership records ca
 
 Google identities create profile records. Personal invitation tokens are stored as hashes and tied to an intended email address, with expiry and revocation. A signed-in user must accept a matching invitation before joining.
 
-An own-name update RPC derives its target from the verified session, never a supplied user ID. Profile names remain visible to authorised co-members; private account emails and appearance choices are not added to shared profile rows. Names can change in history displays, while ledger references keep their immutable user IDs. Appearance is stored on the device and can follow the operating system.
+An own-name update RPC derives its target from the verified session, never a supplied user ID. Profile names remain visible to authorised co-members; private account emails and appearance choices are not added to shared profile rows. Names can change in history displays, while ledger references keep their stable participant IDs. Appearance is stored on the device and can follow the operating system.
 
 Readable tables use row-level security. Clients cannot write financial and workflow tables directly; public RPC wrappers call private functions that check identity, membership, role and input before a transaction commits. The database, rather than hidden buttons, enforces permission decisions.
+
+### Participants and accounts
+
+The prepared participant schema separates a place in a group's ledger from a signed-in account. `group_participants` has a stable `(group_id, id)` key and a nullable `auth_user_id`. Existing members retain their current ledger IDs; an invited person receives a new group-specific participant ID without an Auth account or membership. Expense payers, expense/refund shares and repayment endpoints use participant IDs. Memberships, action authors, shopping claims, profiles, photos and device subscriptions continue to use Auth IDs.
+
+An organiser can include an invited person in expenses while their personal invitation is active. Only the verified Google account matching that invitation can review its own recorded totals and claim the place. Claiming binds the account to the existing participant ID and creates the scoped membership atomically; it does not move ledger rows, recalculate amounts or approve earlier entries. A fresh review digest prevents accepting a stale summary. Separate existing ledger identities are never silently merged.
+
+`get_group_state_v4` exposes `my_participant_id` and explicit member account/status fields. The UI uses these fields for ledger comparisons and resolves real accounts separately for permission controls, actor names and photos. Older snapshot APIs require a client refresh once a group contains an unclaimed person or a participant whose ID differs from their account. See [pending participants](PENDING-PARTICIPANTS.md) for the flow, privacy boundaries and migration order.
 
 ## Money and history
 
@@ -60,7 +75,9 @@ A recipient cannot create another repayment while any pending record exists from
 
 The `record_repayment` RPC and compatible `record_payment` RPC use the same insert helper. A transaction advisory lock serialises each directed participant pair, including when no payment row exists yet. Payment actions acquire that pair lock before locking their row. Request replay runs before these checks, so checking an uncertain save returns its earlier result without creating a second record. The old RPC retains its signature and original request hash; new exact duplicates are rejected, and older clients cannot override that guard.
 
-`recorded_by` identifies the participant who entered a payment; the migration backfills existing rows with their sender. Receipt activity identifies the recipient as the actor. Confirmed payments can be reversed by their recipient or an organiser, with a reason, while preserving history. Corrections retain the voided original expense and create a replacement; refunds are bounded by the refundable amount.
+`recorded_by` identifies the authenticated account that entered a payment; the earlier repayment migration backfills existing rows with their sender. In the participant schema, payment endpoints remain stable ledger IDs while recorder and activity attribution remain Auth IDs. Confirmed payments can be reversed by their recipient or an organiser, with a reason, while preserving history. Corrections retain the voided original expense and create a replacement; refunds are bounded by the refundable amount.
+
+Repayments require both people to have joined and retain access. The database resolves the recipient's Auth account before reading approval preferences or authorising an action. Any nonzero balance belonging to an unjoined person pauses all suggested repayments; the UI never removes that balance to calculate suggestions for the remaining people. Actual repayments between current members can still be recorded.
 
 Request IDs and stored operation results let supported mutations reconcile a retry without applying the same request twice. Version checks detect edits based on stale state. Local tests exercise these rules, but they do not certify races across independent PostgreSQL connections.
 
@@ -69,6 +86,8 @@ Request IDs and stored operation results let supported mutations reconcile a ret
 Realtime notifications trigger a fresh household snapshot. The app also refreshes on focus, visibility changes, reconnect and every 30 seconds while visible and online. The database remains authoritative; the client does not merge an offline ledger.
 
 Expense drafts and pending operations use browser local storage, scoped to the user and group. Invitation and sign-in return state use session storage. Losing browser data can lose an unfinished draft or recovery request, so storage is not a backup. A network timeout does not prove a write failed; use the existing recovery action before entering the same expense again.
+
+The new inclusion form retains its request ID and token in component memory for a same-request retry. Leaving the form loses that copy of the link. Reissuing an invitation for the same email in the same group retains the pending participant and their ledger, but invalidates the earlier unused link.
 
 ## Hosting and scope
 
@@ -95,6 +114,14 @@ Authenticated reads check current shared-household/trip membership before and af
 
 Database triggers enqueue committed expense, refund and repayment events for involved participants, excluding the actor. Corrections include the prior and new participant sets. Private preferences, device subscriptions and outbox rows are not directly browser-readable. Registration binds a device to the verified account/session; delivery rechecks session validity, membership and preferences.
 
+The participant compatibility migration resolves ledger IDs to joined Auth accounts before enqueueing. Unclaimed people have no delivery target, and a join-time check prevents a deferred historical event from creating a surprise alert after claim. Claiming itself does not replay financial notifications. This migration is a no-op when the optional notification module is absent; installing that module later requires applying the compatibility update before enabling it.
+
 A scheduler invokes the dispatcher with a server-only token. It claims queued deliveries, encrypts generic text for the browser push endpoint, retries temporary failures and disables expired endpoints. Categories and Friendly/Brief tone are configurable; payloads contain no names, amounts, household details or photos. Account switches clear the local binding and subscription. Tapping a notification resolves the destination only after access is checked again.
 
 Push is best effort: provider acceptance does not prove phone display, and a crash after acceptance may cause a retry. Native device delivery remains an acceptance step. Photos and notifications have independent build flags and server setup; the current production release enables photos only. See the [service guides](../supabase/functions/) and [deployment guide](DEPLOYMENT.md).
+
+## Optional invitation email
+
+The browser submits only a group ID and personal invitation token. The Edge Function verifies the signed-in Google account, hashes the token, and obtains the authorised recipient and frozen message metadata through service-only RPCs. Tokens are not stored in recoverable form. A fixed trusted app origin determines the link; sender and provider credentials stay on the server.
+
+A database lease serialises foreground send attempts, and a stable delivery ID supplies the provider idempotency key. Pact reports email sent only after provider acceptance and a confirmed database receipt; this does not prove inbox delivery or reading. Unknown results use the same invitation and frozen message for bounded retries. There is no unattended mail queue. The service can remain disabled while manual invitation links and pending participants work. See [invitation emails](INVITATION-EMAIL.md).
