@@ -9,8 +9,9 @@ import {createServer} from 'vite';
 const {chromium}=await import(process.env.PACT_PLAYWRIGHT_MODULE||'playwright');
 // The fixture overrides every public connection value, even if .env.local exists.
 const fixtureUrl='https://pact-fixture.supabase.co';
+const invitationEmailMode=process.argv.includes('--invitation-email');
 const axePath=process.env.PACT_AXE_PATH||fileURLToPath(import.meta.resolve('axe-core/axe.min.js'));
-const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureUrl),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only')},server:{host:'127.0.0.1',port:4173,strictPort:true}});await server.listen();
+const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureUrl),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only'),'import.meta.env.VITE_INVITATION_EMAIL_ENABLED':JSON.stringify(invitationEmailMode?'true':'false')},server:{host:'127.0.0.1',port:4173,strictPort:true}});await server.listen();
 const browser=await chromium.launch({...(process.env.PACT_CHROMIUM_PATH?{executablePath:process.env.PACT_CHROMIUM_PATH}:{}),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
 const host='http://127.0.0.1:4173',out='qa/artifacts/screenshots';mkdirSync(out,{recursive:true});
 const nameFilter=process.argv[2]?new RegExp(process.argv[2],'i'):null;
@@ -25,7 +26,7 @@ async function fixture({empty=false,signedIn=true,width=390,scheme='light',requi
  async function call(actor,name,args){assert.match(name,/^[a-z_]+$/);const keys=Object.keys(args);keys.forEach(k=>assert.match(k,/^p_[a-z_]+$/));const params=keys.map((k,i)=>`${k}=>$${i+1}`).join(',');const values=keys.map(k=>args[k]!==null&&typeof args[k]==='object'&&!Array.isArray(args[k])?JSON.stringify(args[k]):args[k]);const result=await sql(actor,`select public.${name}(${params}) as value`,values);return result.rows[0].value;}
  let home='',trip='';if(!empty){home=await call(ids[0],'create_space',{p_name:'Our home',p_kind:'household',p_parent:null,p_people:[],p_request:randomUUID()});for(const member of members.slice(1).filter(member=>!tripGuest||member.id!==ids[3])){const token=await call(ids[0],'create_invitation',{p_group:home,p_email:member.email});await call(member.id,'accept_invitation',{p_token:token});}trip=await call(ids[0],'create_space',{p_name:'Weekend away',p_kind:'trip',p_parent:home,p_people:[ids[1]],p_request:randomUUID()});for(const [description,amount,payer,people,category,date] of [['Weekly groceries',8640,ids[0],ids,'groceries','2026-10-03'],['Friday takeout',5400,ids[1],ids.slice(0,3),'takeaway','2026-10-02']])await call(ids[0],'save_expense',{p_input:{p_group:home,p_request:randomUUID(),p_description:description,p_amount:amount,p_payer:payer,p_people:people.filter(id=>!tripGuest||id!==ids[3]),p_mode:'equal',p_exact:null,p_date:date,p_category:category,p_note:''}});}
  if(requireApproval)for(const actor of ids)await call(actor,'set_payment_preferences',{p_require_approval:true});
- const state={calls:[],errors:[],unexpected:[],abortOnce:'',authOnce:'',rejectOnce:'',hangOnce:'',delayInvite:0};const contexts=[];
+ const state={calls:[],errors:[],unexpected:[],abortOnce:'',authOnce:'',rejectOnce:'',hangOnce:'',delayInvite:0,emailResponses:[],emailDelay:0,emailStatuses:[]};const contexts=[];
  async function createPage(actor=ids[0],options={}){const context=await browser.newContext({viewport:{width,height:844},deviceScaleFactor:1,colorScheme:scheme,reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write'],...options});contexts.push(context);const i=ids.indexOf(actor);const user={id:actor,aud:'authenticated',role:'authenticated',email:`${names[i].toLowerCase()}@example.test`,email_confirmed_at:'2026-10-01T00:00:00Z',app_metadata:{provider:'google',providers:['google']},user_metadata:{full_name:names[i]},created_at:'2026-10-01T00:00:00Z'};const session={access_token:[{alg:'HS256',typ:'JWT'},{sub:actor,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'fixture'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.'),refresh_token:'local-only',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user};
  if(signedIn)await context.addInitScript(({session})=>{if(!localStorage.getItem('sb-pact-fixture-auth-token'))localStorage.setItem('sb-pact-fixture-auth-token',JSON.stringify(session));},{session});
  await context.routeWebSocket(/^wss:/,ws=>ws.close());
@@ -58,6 +59,20 @@ async function fixture({empty=false,signedIn=true,width=390,scheme='light',requi
    }catch(e){return respond({code:e.code??'P0001',message:e.message},400);}
   }
   const name=url.pathname.split('/').at(-1),args=request.postDataJSON();state.calls.push({name,args});
+  // Email transport is simulated here; database permissions and provider
+  // idempotency have separate tests. No request reaches a mail service.
+  if(name==='invitation-email'){
+   assert.match(args.token,/^[a-f0-9]{64}$/);assert.equal(args.group_id,home);
+   const invitation=(await call(actor,'get_household_state',{p_group:home,p_limit:1})).invitations[0];
+   assert.ok(invitation,'An invitation must exist before email sending');
+   if(state.emailDelay)await new Promise(resolve=>setTimeout(resolve,state.emailDelay));
+   const chosen=state.emailResponses.shift()??{status:'sent',can_retry:false};
+   const record={invitation_id:invitation.id,intended_email:invitation.intended_email,sent_at:chosen.status==='sent'?new Date().toISOString():null,last_attempt_at:new Date().toISOString(),retry_at:null,retry_until:new Date(Date.now()+23*3600_000).toISOString(),error_code:null,...chosen};
+   state.emailStatuses=[record];
+   if(chosen.abort)return route.abort('failed');
+   return respond(record,chosen.status==='unknown'||chosen.status==='sending'?202:200);
+  }
+  if(invitationEmailMode&&name==='get_invitation_email_status')return respond(state.emailStatuses);
   if(state.hangOnce===name){state.hangOnce='';return;}
   if(state.authOnce===name){state.authOnce='';return respond({code:'PGRST301',message:'JWT expired'},401);}
   if(state.rejectOnce===name){state.rejectOnce='';return respond({code:'23514',message:'The profile could not be saved. Please try again.'},400);}
@@ -562,6 +577,47 @@ try{
   assert.doesNotMatch(await page.locator('main').innerText(),/@example\.test/);
   await page.setViewportSize({width:390,height:844});await shot(page,'members-long-name');await done(f);
  });
+ if(invitationEmailMode){
+  async function openEmailInvite(page){await page.getByRole('button',{name:'People & trips',exact:true}).click();await page.getByRole('button',{name:'Invite a flatmate',exact:true}).click();await page.getByLabel('Google email').fill('guest@example.test');}
+  await test('Invitation email sends once, freezes input and presents honest receipt',async()=>{
+   const f=await fixture({width:320});const {page}=f;await openEmailInvite(page);f.state.emailDelay=250;
+   await page.getByRole('button',{name:'Send invitation email',exact:true}).click();
+   await page.getByRole('heading',{name:'Your invitation',exact:true}).waitFor();
+   await page.getByRole('heading',{name:'Email sent',exact:true}).waitFor();
+   assert.match(await page.locator('main').innerText(),/Inbox delivery is not confirmed/);
+   assert.equal(f.state.calls.filter(c=>c.name==='create_invitation').length,1);
+   assert.equal(f.state.calls.filter(c=>c.name==='invitation-email').length,1);
+   assert.equal(await page.getByRole('button',{name:'Retry email',exact:true}).count(),0);
+   await layout(page,'invitation email receipt');await accessibility(page,'invitation email receipt');await shot(page,'invitation-email-sent');
+   await page.getByRole('button',{name:'Done',exact:true}).click();
+   await page.getByText(/Pending invitations/).click();await page.getByText('Email sent',{exact:true}).waitFor();
+   await page.reload();await page.getByText(/Pending invitations/).click();await page.getByText('Email sent',{exact:true}).waitFor();await done(f);
+  });
+  await test('Invitation email uncertain retry keeps the original token and link',async()=>{
+   const f=await fixture();const {page}=f;await openEmailInvite(page);f.state.emailResponses=[{status:'unknown',can_retry:true},{status:'sent',can_retry:false}];
+   await page.getByRole('button',{name:'Send invitation email',exact:true}).click();await page.getByRole('heading',{name:'Send status unconfirmed',exact:true}).waitFor();
+   const link=await page.getByLabel('Invitation link',{exact:true}).inputValue();
+   await page.getByRole('button',{name:'Retry email',exact:true}).click();await page.getByRole('heading',{name:'Email sent',exact:true}).waitFor();
+   assert.equal(await page.getByLabel('Invitation link',{exact:true}).inputValue(),link);
+   const requests=f.state.calls.filter(c=>c.name==='invitation-email');assert.equal(requests.length,2);assert.deepEqual(requests[0].args,requests[1].args);
+   assert.equal(f.state.calls.filter(c=>c.name==='create_invitation').length,1);await done(f);
+  });
+  await test('Invitation email lost response checks exact invitation without sending again',async()=>{
+   const f=await fixture();const {page}=f;await openEmailInvite(page);f.state.emailResponses=[{status:'sent',can_retry:false,abort:true}];
+   await page.getByRole('button',{name:'Send invitation email',exact:true}).click();await page.getByRole('heading',{name:'Send status unconfirmed',exact:true}).waitFor();
+   await page.getByRole('button',{name:'Check email status',exact:true}).click();await page.getByRole('heading',{name:'Email sent',exact:true}).waitFor();
+   const check=f.state.calls.filter(c=>c.name==='get_invitation_email_status').at(-1);assert.match(check.args.p_token_hash,/^[a-f0-9]{64}$/);assert.equal(check.args.p_group,f.home);
+   assert.equal(f.state.calls.filter(c=>c.name==='invitation-email').length,1);assert.equal(f.state.calls.filter(c=>c.name==='create_invitation').length,1);await done(f);
+  });
+  await test('Invitation email manual sharing and terminal rejection remain usable',async()=>{
+   const f=await fixture();const {page}=f;await openEmailInvite(page);
+   await page.getByRole('button',{name:'Create a link instead',exact:true}).click();await page.getByRole('heading',{name:'Share the invitation',exact:true}).waitFor();
+   assert.match(await page.locator('main').innerText(),/No email is sent automatically/);assert.equal(f.state.calls.filter(c=>c.name==='invitation-email').length,0);
+   await page.getByRole('button',{name:'Invite another person',exact:true}).click();await page.getByLabel('Google email').fill('another@example.test');f.state.emailResponses=[{status:'failed',can_retry:false,error_code:'provider_rejected'}];
+   await page.getByRole('button',{name:'Send invitation email',exact:true}).click();await page.getByRole('heading',{name:'Could not send email',exact:true}).waitFor();
+   assert.equal(await page.getByRole('button',{name:'Retry email',exact:true}).count(),0);await page.getByRole('button',{name:'Copy link',exact:true}).click();await page.getByRole('button',{name:'Copied',exact:true}).waitFor();await done(f);
+  });
+ }
  if(nameFilter)assert.ok(results.length,'No browser scenario matched the supplied name filter');
  console.log(nameFilter?'All selected local browser scenarios passed.':'All local browser scenarios passed.');
 }finally{await browser.close();await server.close();}

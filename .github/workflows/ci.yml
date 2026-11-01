@@ -28,9 +28,12 @@ jobs:
       - run: npm run test:browser
       - run: npm run test:privacy-browser
       - run: npm run test:notifications-browser
+      - run: npm run test:invitations-browser
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.6
       - run: deno check --frozen --config supabase/functions/profile-photo/deno.json supabase/functions/profile-photo/index.ts
       - run: deno check --frozen --config supabase/functions/dispatch-notifications/deno.json supabase/functions/dispatch-notifications/index.ts
       - run: deno test --frozen --allow-env --config supabase/functions/dispatch-notifications/deno.json supabase/functions/dispatch-notifications/dispatch.test.ts
+      - run: deno check --frozen --config supabase/functions/invitation-email/deno.json supabase/functions/invitation-email/index.ts
+      - run: deno test --frozen --allow-env --config supabase/functions/invitation-email/deno.json supabase/functions/invitation-email/

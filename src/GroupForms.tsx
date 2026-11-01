@@ -2,6 +2,7 @@ import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {reauthenticate,rpc,type Group,type Member,type Snapshot} from './api';
 import {message} from './errors';
 import {clearInvite,invitationToken,rememberInvite} from './invitations';
+import {invitationEmailEnabled,invitationEmailLabel,invitationEmailMessage,loadInvitationEmailStatus,sendInvitationEmail,type InvitationEmailResult} from './invitationEmail';
 import {useMutation} from './useMutation';
 import {Recovery} from './actions';
 import {Alert,FormHeader,Icon,Loading,moveToTop} from './ui';
@@ -26,24 +27,63 @@ export function JoinForm({initialToken,email,onBack,online,onJoined}:FormProps&{
 export function InviteForm({group,onBack,online}:FormProps&{group:Group}) {
  const isTrip=group.kind==='trip';
  const [email,setEmail]=useState(''),[recipient,setRecipient]=useState(''),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
- const flight=useRef(false);
- async function submit(event:FormEvent){event.preventDefault();if(flight.current||!online)return;const submitted=email.trim().toLowerCase();flight.current=true;setBusy(true);setError('');setCopied(false);try{const token=await rpc<string>('create_invitation',{p_group:group.id,p_email:submitted});setRecipient(submitted);setLink(`${location.origin}/#invite=${token}`);moveToTop();}catch(e){setError(message(e));}finally{flight.current=false;setBusy(false);}}
+ const [delivery,setDelivery]=useState<InvitationEmailResult|null>(null),[checking,setChecking]=useState(false);
+ // Keep the token only for this form's lifetime. Returning later uses the
+ // organiser's safe status records, never recovered bearer tokens.
+ const flight=useRef(false),pendingToken=useRef('');
+ async function submit(event:FormEvent){
+  event.preventDefault();if(flight.current||!online)return;
+  const emailDelivery=invitationEmailEnabled&&(event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-delivery')!=='link';
+  const submitted=email.trim().toLowerCase();flight.current=true;setBusy(true);setError('');setCopied(false);setDelivery(null);
+  try{
+   const token=await rpc<string>('create_invitation',{p_group:group.id,p_email:submitted});
+   if(!/^[0-9a-f]{64}$/.test(token))throw new Error('The invitation link could not be loaded. Return to People and try again.');
+   pendingToken.current=token;setRecipient(submitted);setLink(`${location.origin}/#invite=${token}`);moveToTop();
+   if(emailDelivery){setDelivery({status:'sending',can_retry:false});setDelivery(await sendInvitationEmail(group.id,token));}
+  }catch(e){setError(message(e));}finally{flight.current=false;setBusy(false);}
+ }
+ async function retryEmail(){
+  if(flight.current||!online||!pendingToken.current)return;
+  flight.current=true;setBusy(true);setError('');setDelivery(old=>({...old,status:'sending',can_retry:false}));
+  try{setDelivery(await sendInvitationEmail(group.id,pendingToken.current));}finally{flight.current=false;setBusy(false);}
+ }
+ async function checkEmail(){
+  if(flight.current||!online||!pendingToken.current)return;
+  flight.current=true;setChecking(true);setError('');
+  try{
+   const rows=await loadInvitationEmailStatus(group.id,pendingToken.current);
+   setDelivery(rows[0]??{status:'failed',can_retry:false,error_code:'invalid_invitation'});
+  }catch{setError('Email status could not be checked. This does not tell us whether it was sent. Try checking again or share the existing link.');}
+  finally{flight.current=false;setChecking(false);}
+ }
+ const locked=busy||checking;
+ const retryAllowed=delivery&&(delivery.can_retry||delivery.status==='not_sent'||delivery.status==='unavailable')&&(!delivery.retry_until||Date.parse(delivery.retry_until)>Date.now());
  async function copy(){try{await navigator.clipboard.writeText(link);setCopied(true);setError('');}catch{setError('Select and copy the invitation link below.');}}
  async function share(){try{await navigator.share({title:`Join ${group.name} on Pact`,text:isTrip?`Join ${group.name} on Pact. This invitation is for this trip only and does not give household access. Use your invited Google account. The link expires in 7 days.`:`Join our household, ${group.name}, on Pact. Use your invited Google account. The link expires in 7 days.`,url:link});}catch(e){if((e as Error).name!=='AbortError')setError('Sharing did not open. Use Copy link instead.');}}
  return <section className="form-page">
-  <FormHeader title={link?(isTrip?'Share the trip invitation':'Share the invitation'):(isTrip?'Invite a friend':'Invite a flatmate')} context={group.name} onBack={onBack} disabled={busy}/>
+  <FormHeader title={link?(delivery?'Your invitation':isTrip?'Share the trip invitation':'Share the invitation'):(isTrip?'Invite a friend':'Invite a flatmate')} context={group.name} onBack={onBack} disabled={locked}/>
   {isTrip&&<p className="callout">This invitation adds them only to <strong className="break-word">{group.name}</strong>. It does not give access to any household or other trips.</p>}
   {link?<>
-   <p className="muted">Send this link to <strong className="break-word">{recipient}</strong>. They can open it and sign in with that Google account.</p>
-   <div className="share-actions"><button className="primary" onClick={copy}>{copied&&<Icon name="check"/>}{copied?'Copied':'Copy link'}</button>{typeof navigator.share==='function'&&<button onClick={share}>Share…</button>}</div>
-   <p className="helper" role="status">{copied&&'Link copied. Paste it into your message. '}Expires in 7 days. No email is sent automatically.</p>
+   <p className="muted">{delivery?'This personal invitation is for ':'Send this link to '}<strong className="break-word">{recipient}</strong>. They can open it and sign in with that Google account.</p>
+   {delivery&&<section className="card" aria-label="Invitation email status">
+    <div role="status" aria-live="polite"><h2>{invitationEmailLabel(delivery.status)}</h2><p className="helper">{invitationEmailMessage(delivery)}</p></div>
+    {delivery.retry_at&&delivery.status!=='sent'&&<p className="helper">Next status check: {new Date(delivery.retry_at).toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})}.</p>}
+    <div className="inline-actions">
+     {(delivery.status==='sending'||delivery.status==='unknown')&&<button disabled={locked||!online} onClick={()=>void checkEmail()}>{checking?'Checking…':'Check email status'}</button>}
+     {retryAllowed&&<button className="primary" disabled={locked||!online} onClick={()=>void retryEmail()}>{busy?'Sending…':delivery.status==='not_sent'?'Send invitation email':'Retry email'}</button>}
+    </div>
+   </section>}
+   <div className="share-actions"><button className={delivery?'':'primary'} disabled={locked} onClick={copy}>{copied&&<Icon name="check"/>}{copied?'Copied':'Copy link'}</button>{typeof navigator.share==='function'&&<button disabled={locked} onClick={share}>Share…</button>}</div>
+   <p className="helper" role="status">{copied&&'Link copied. Paste it into your message. '}Expires in 7 days.{!delivery&&' No email is sent automatically.'}</p>
    <label>Invitation link<input readOnly value={link} onFocus={e=>e.target.select()}/></label><Alert text={error}/>
-   <div className="form-actions"><button onClick={()=>{setLink('');setEmail('');setCopied(false);setError('');}}>Invite another person</button><button onClick={onBack}>Done</button></div>
+   <div className="form-actions"><button disabled={locked} onClick={()=>{pendingToken.current='';setLink('');setEmail('');setCopied(false);setError('');setDelivery(null);}}>Invite another person</button><button disabled={locked} onClick={onBack}>Done</button></div>
   </>:<form onSubmit={submit}>
-   <p className="muted">Enter their Google email, then share their personal invitation link.</p>
+   <p className="muted">{invitationEmailEnabled?'Enter their Google email. Pact will email them a personal invitation to join you.':'Enter their Google email, then share their personal invitation link.'}</p>
    <label>Google email<input required disabled={busy} type="email" maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@gmail.com" autoComplete="email" autoCapitalize="none" spellCheck={false}/></label><Alert text={error}/>
-   <button className="primary full" disabled={busy||!online}>{busy?'Creating link…':'Create invitation link'}</button>
-   <p className="helper">Expires in 7 days. No email is sent automatically.</p>
+   <p className="helper">Creating another invitation for this email and {isTrip?'trip':'household'} replaces their previous invitation. Older links will stop working.</p>
+   <button className="primary full" disabled={busy||!online}>{busy?'Creating link…':invitationEmailEnabled?'Send invitation email':'Create invitation link'}</button>
+   {invitationEmailEnabled&&<button className="full" data-delivery="link" disabled={busy||!online}>Create a link instead</button>}
+   <p className="helper">Expires in 7 days.{invitationEmailEnabled?' They must sign in with their invited Google account.':' No email is sent automatically.'}</p>
   </form>}
  </section>;
 }

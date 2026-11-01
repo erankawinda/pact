@@ -14,6 +14,7 @@
     "check:privacy": "node scripts/check-public-privacy.mjs",
     "check": "npm run check:privacy && npm test && npm run build",
     "test:browser": "node qa/browser.mjs",
+    "test:invitations-browser": "node qa/browser.mjs '^Invitation email' --invitation-email",
     "test:privacy-browser": "node qa/privacy-browser.mjs",
     "test:notifications-browser": "node qa/notifications-browser.mjs"
   },
