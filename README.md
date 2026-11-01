@@ -63,6 +63,12 @@ Profile photos are visible only to the owner and current members of a shared hou
 
 **In staging:** opt-in transaction notifications for involved recipients, with category choices and Friendly/Brief tone. Lock-screen text excludes names and amounts. This code is included but disabled in the current production build; [server setup and real-device validation](docs/DEPLOYMENT.md#upgrade-to-040-preview5) are separate steps.
 
+## Inviting friends to a trip
+
+The next update adds **People & trips → Invite a friend** inside the selected trip. Enter a friend's Google email and share the personal link. They can join that trip with a new or existing Pact account without joining its linked household. Trip organisers can still add existing household members separately.
+
+This is prepared source, not yet a production rollout. There is no global Friends list or contact directory. Each group has its own participants, permissions and ledger; being in one group grants no access to another. See [trip invitations and access](docs/TRIP-INVITATIONS.md) for the user flow, compatibility rules and rollout checks.
+
 ## Run locally
 
 Use Node.js **22.12 or later** (`.nvmrc` selects Node 22).

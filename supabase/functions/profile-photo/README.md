@@ -23,8 +23,9 @@ The browser also supplies its normal Supabase `apikey` header to the API gateway
 No request accepts a user ID as the owner of a write.
 
 - `GET ?user_id=<uuid>` returns JPEG bytes or 404. The requester must be the owner
-  or an effective active member of a common household/trip. For trips, both people
-  must also remain active in the parent household. Authorisation is rechecked
+  or an effective active member of a common household/trip. Household-bound trip
+  members must also remain active in the parent household; direct trip members
+  introduced by the guest invitation migration do not need household membership. Authorisation is rechecked
   after Storage returns the bytes.
 - `GET ?status=1` returns the caller's state. An optional `user_id` must be their
   own ID. Ready: `{status:"ready",version:"uuid"}`. Empty: `{status:"empty"}`.

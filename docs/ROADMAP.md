@@ -22,6 +22,8 @@ The current [preview.6 release](RELEASE-0.4.0-PREVIEW.6.md) includes recipient-r
 
 Before extending these features, validate phone delivery, rehearse recovery from interrupted photo operations and document routine private Storage cleanup. Keep notification categories limited to changes involving the recipient; add reminders only with a separate explicit opt-in.
 
+The direct-trip-invitation update is being prepared separately; see [its scope and validation status](TRIP-INVITATIONS.md). A reusable private Friends list is a possible follow-up, with acceptance and per-group access kept separate.
+
 The next product priorities are:
 
 - A simple view of enabled notification devices, including a way to revoke an unavailable old device.

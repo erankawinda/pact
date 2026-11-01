@@ -40,7 +40,7 @@ flowchart LR
 
 ## Shared data and access
 
-A group is either a household or a trip under a household. Membership records carry an organiser/member role and active/revoked status. Trip membership is limited to selected household members; household access also gates linked trip access.
+A group is either a household or a trip under a household. Membership records carry an organiser/member role, active/revoked status and an access basis. Existing trip memberships and the household-member picker remain household-bound: parent-household membership still gates access. New direct trip invitations create membership only in the selected trip, allowing friends who have no household membership. Existing memberships are not silently converted. See [trip invitations](TRIP-INVITATIONS.md) for the prepared update and rollout boundary.
 
 Google identities create profile records. Personal invitation tokens are stored as hashes and tied to an intended email address, with expiry and revocation. A signed-in user must accept a matching invitation before joining.
 
@@ -89,7 +89,7 @@ The browser validates source type, dimensions and size, then prepares a square J
 
 A service-only lifecycle operation derives the owner from the verified Auth response. Each photo has an immutable generation and object path; upload reservations, stable request identifiers and version-bound deletion make retries safe. A ready photo must be deleted through the Storage API before another can be saved. An unfinished upload may remain private until the owner returns or maintenance cleans it up.
 
-Authenticated reads check current shared-household/trip membership before and after fetching the object. A trip also requires active membership in its parent household. Responses are `private, no-store`, without public or signed URLs. The frontend renders short-lived blob URLs scoped to the account and current group state, and clears them on context changes and refresh. This access model cannot recall a photo someone has already seen or copied.
+Authenticated reads check current shared-household/trip membership before and after fetching the object. Household-bound trip members also require active parent-household membership; directly invited trip members do not. Both people must have effective access to the same group. Responses are `private, no-store`, without public or signed URLs. The frontend renders short-lived blob URLs scoped to the account and current group state, and clears them on context changes and refresh. This access model cannot recall a photo someone has already seen or copied.
 
 ## Optional transaction notifications
 

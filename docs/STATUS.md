@@ -2,6 +2,10 @@
 
 Pact **0.4.0-preview.6** was verified in production on **11 October 2026**. All nine served static files matched the reviewed release package. The photo backend was installed and checked before that upload. This is a dated verification, not a live service-status report; no real household records or photos were used as test fixtures.
 
+## Prepared trip invitation update
+
+Direct email-bound invitations let a new or existing Pact user join only the selected trip. Existing household-linked memberships keep their access rules. The interface separates **Invite a friend** from the existing household-member picker, and a guest organiser cannot load the household directory. See [scope, checks and rollout requirements](TRIP-INVITATIONS.md). Local verification passed 71 Node tests and 42 browser scenarios. The staging migration and rollback-only hosted smoke test passed with no test users/groups retained. This update is not yet deployed to production.
+
 ## Current profile release
 
 **0.4.0-preview.6** is the current production frontend. Photos are enabled; transaction notifications remain disabled. The deployment contains the reviewed account redesign and photo controls. A real production-account upload remains unverified.
