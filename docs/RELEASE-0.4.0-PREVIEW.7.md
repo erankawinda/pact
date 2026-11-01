@@ -1,6 +1,6 @@
 # 0.4.0-preview.7 — Invite friends to a trip
 
-Prepared on 1 November 2026. The database upgrade is installed in production; frontend publication and final asset verification are pending.
+Verified in production on 1 November 2026. The database upgrade passed post-installation checks, and all nine served frontend files matched the reviewed release package.
 
 ## What changes
 
@@ -19,9 +19,9 @@ Production retains profile photos enabled and transaction notifications disabled
 ## Validation
 
 - Public privacy gate, 71 Node/database tests, TypeScript and the configured production build passed.
-- All 42 isolated browser scenarios passed: 25 core, eight photo/account and nine notification scenarios.
+- All 42 isolated browser scenarios passed: 25 core, eight photo/account and nine notification scenarios. [GitHub Actions on application commit `7bfcb05`](https://github.com/erankawinda/pact/actions/runs/41263402537) also passed both Edge Function checks and seven notification-worker runtime tests.
 - The exact migration passed hosted staging checks using actual database roles and synthetic fixtures. Fixtures were rolled back; cleanup confirmed no test guests or groups remained.
-- Production schema and function compatibility were checked before applying the migration. No unrelated older migrations were rerun.
+- Production schema and function compatibility were checked before applying the migration. After installation, all 12 relevant function definitions, 36 columns and 27 constraints matched tested source; restricted grants and RLS remained intact. No unrelated older migrations were rerun.
 - Commit metadata and normal source history passed the private-value scan. No real household data, invitation tokens, photographs, production configuration or server secrets are included.
 
 Actual fresh-account Google OAuth acceptance, simultaneous operations across separate PostgreSQL connections and native phone notification delivery remain unverified. Browser tests intercept external services; hosted database tests do not replace those checks. See [verification status](STATUS.md).

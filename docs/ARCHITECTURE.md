@@ -40,7 +40,7 @@ flowchart LR
 
 ## Shared data and access
 
-A group is either a household or a trip under a household. Membership records carry an organiser/member role, active/revoked status and an access basis. Existing trip memberships and the household-member picker remain household-bound: parent-household membership still gates access. New direct trip invitations create membership only in the selected trip, allowing friends who have no household membership. Existing memberships are not silently converted. See [trip invitations](TRIP-INVITATIONS.md) for the prepared update and rollout boundary.
+A group is either a household or a trip under a household. Membership records carry an organiser/member role, active/revoked status and an access basis. Existing trip memberships and the household-member picker remain household-bound: parent-household membership still gates access. New direct trip invitations create membership only in the selected trip, allowing friends who have no household membership. Existing memberships are not silently converted. See [trip invitations](TRIP-INVITATIONS.md) for the access rules and deployment compatibility.
 
 Google identities create profile records. Personal invitation tokens are stored as hashes and tied to an intended email address, with expiry and revocation. A signed-in user must accept a matching invitation before joining.
 

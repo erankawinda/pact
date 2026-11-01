@@ -2,7 +2,7 @@
 
 ## Scope and rollout
 
-Prepared update, not yet deployed to production. The currently released preview.6 requires participants to belong to the trip's parent household. This change introduces direct invitations to one trip without adding household membership. An activity such as a sports session uses the existing trip group; no separate event type is introduced.
+The preview.7 database upgrade was verified in production on 1 November 2026. The frontend was published and all nine served files matched the reviewed package. This change introduces direct invitations to one trip without adding household membership. An activity such as a sports session uses the existing trip group; no separate event type is introduced.
 
 There is no global Friends list. A Pact account is a person's identity and profile. Household and trip memberships determine what they can access. Creating an invitation does not create an account or add the recipient before they accept.
 
@@ -47,4 +47,4 @@ Verified on 1 November 2026:
 - New private helpers deny direct execution by anonymous and authenticated clients. Hosted security advisors reported no new findings; existing private-table policy notices and the pre-existing password-protection notice remain.
 - Concurrency lock ordering was independently reviewed, but simultaneous operations across separate PostgreSQL connections were not exercised. Real Google sign-in and real-device notification delivery remain separate acceptance checks.
 
-The source is prepared on a feature branch and the database change is installed only in staging. The production database and frontend have not been changed by this update. No real household information, live invitation tokens, email addresses or photographs were used as fixtures or added to source.
+Production post-upgrade checks matched all 12 relevant functions, 36 columns and 27 constraints to tested source. Private helper grants and direct table-write restrictions remain intact. The production frontend matches the reviewed preview.7 package. No real household information, live invitation tokens, email addresses or photographs were used as fixtures or added to source.
