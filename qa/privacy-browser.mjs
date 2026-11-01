@@ -8,7 +8,7 @@ import {createServer} from 'vite';
 import {chromium} from 'playwright';
 import jpeg from 'jpeg-js';
 const host='http://127.0.0.1:4174',fixtureOrigin='https://pact-photo-fixture.supabase.co';
-const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureOrigin),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only'),'import.meta.env.VITE_PROFILE_PHOTOS_ENABLED':'"true"','import.meta.env.VITE_NOTIFICATIONS_ENABLED':'"false"','import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY':'""'},server:{host:'127.0.0.1',port:4174,strictPort:true}});
+const server=await createServer({envDir:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify(fixtureOrigin),'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY':JSON.stringify('sb_publishable_fixture_only'),'import.meta.env.VITE_PROFILE_PHOTOS_ENABLED':'"true"','import.meta.env.VITE_NOTIFICATIONS_ENABLED':'"false"','import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY':'""','import.meta.env.VITE_INVITATION_EMAIL_ENABLED':'"false"'},server:{host:'127.0.0.1',port:4174,strictPort:true}});
 await server.listen();const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
 const out='qa/artifacts/privacy';mkdirSync(out,{recursive:true});const results=[],nameFilter=process.argv.slice(2).join(' ');
 const axe=readFileSync(fileURLToPath(import.meta.resolve('axe-core/axe.min.js')),'utf8');
@@ -22,12 +22,13 @@ function syntheticPhonePhoto(){
  return Buffer.concat([encoded.subarray(0,2),segment(225,exif),segment(254,Buffer.from('SYNTHETIC PRIVATE LOCATION')),encoded.subarray(2)]);
 }
 const source=syntheticPhonePhoto();
-async function fixture(initial='empty',{statusFailure=false,displayName='Alex'}={}){
+async function fixture(initial='empty',{statusFailure=false,displayName='Alex',withParticipants=false}={}){
  const user={id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',role:'authenticated',email:'alex@example.test',email_confirmed_at:'2026-10-01T00:00:00Z',app_metadata:{provider:'google',providers:['google']},user_metadata:{full_name:'Alex'},created_at:'2026-10-01T00:00:00Z'};
  const session={access_token:[{alg:'HS256',typ:'JWT'},{sub:user.id,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'fixture'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.'),refresh_token:'local-only',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user};
  const context=await browser.newContext({viewport:{width:390,height:844},colorScheme:'light',reducedMotion:'reduce'});
  await context.addInitScript(session=>localStorage.setItem('sb-pact-photo-fixture-auth-token',JSON.stringify(session)),session);
- const state={status:initial,version:initial==='ready'?randomUUID():null,bytes:initial==='ready'?source:null,uploads:[],deletes:[],errors:[],unexpected:[],fail:statusFailure?'status':'',profileWrites:0,photoStatusReads:0};
+ const groupId='00000000-0000-4000-8000-000000000100',claimedId='00000000-0000-4000-8000-000000000101',waitingId='00000000-0000-4000-8000-000000000102';
+ const state={photoReads:[],claimedId,waitingId,status:initial,version:initial==='ready'?randomUUID():null,bytes:initial==='ready'?source:null,uploads:[],deletes:[],errors:[],unexpected:[],fail:statusFailure?'status':'',profileWrites:0,photoStatusReads:0};
  await context.routeWebSocket(/^wss:/,ws=>ws.close());
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.origin===host)return route.continue();
@@ -35,11 +36,13 @@ async function fixture(initial='empty',{statusFailure=false,displayName='Alex'}=
   if(url.origin!==fixtureOrigin){state.unexpected.push(url.href);return route.abort();}
   if(req.method()==='OPTIONS')return json({});
   if(url.pathname==='/auth/v1/user')return json(user);
-  if(url.pathname==='/rest/v1/groups')return json([]);
+  if(url.pathname==='/rest/v1/groups')return json(withParticipants?[{id:groupId,name:'Our home',kind:'household',archived_at:null,parent_household_id:null}]:[]);
+  if(url.pathname==='/rest/v1/rpc/get_group_state_v4')return json({schema_version:4,my_participant_id:claimedId,members:[{id:claimedId,auth_user_id:user.id,name:displayName,role:'organiser',status:'active',can_select:true,can_repay:true,require_payment_approval:false},{id:waitingId,auth_user_id:null,name:'Blake',role:'member',status:'invited',can_select:true,can_repay:false,require_payment_approval:false}],expenses:[],expense_count:0,shares:[],balances:[{user_id:claimedId,cents:0},{user_id:waitingId,cents:0}],shopping:[],purchases:[],payments:[],refunds:[],refund_shares:[],activity:[],invitations:[]});
   if(url.pathname==='/rest/v1/profiles')return json({display_name:displayName});
   if(url.pathname==='/rest/v1/rpc/get_payment_preferences')return json(false);
   if(url.pathname==='/rest/v1/rpc/update_profile'){state.profileWrites++;return json('Alex');}
   if(url.pathname==='/functions/v1/profile-photo'){
+   if(req.method()==='GET')state.photoReads.push(url.searchParams.get('user_id'));
    assert.match(req.headers().authorization,/^Bearer /);assert.equal(req.headers().apikey,'sb_publishable_fixture_only');
    if(req.method()==='GET'&&url.searchParams.get('status')==='1'){
     state.photoStatusReads++;
@@ -64,7 +67,7 @@ async function fixture(initial='empty',{statusFailure=false,displayName='Alex'}=
   state.unexpected.push(req.method()+' '+url.pathname);return route.abort();
  });
  const page=await context.newPage();page.setDefaultTimeout(8000);page.on('pageerror',e=>state.errors.push(String(e)));page.on('console',message=>{if(/Encountered two children with the same key|Each child in a list should have a unique/.test(message.text()))state.errors.push(message.text());});await page.goto(host);
- await page.getByRole('button',{name:'Create a household',exact:true}).waitFor();await page.getByRole('button',{name:'Account',exact:true}).click();
+ if(withParticipants)await page.getByRole('heading',{name:'Your household',exact:true}).waitFor();else await page.getByRole('button',{name:'Create a household',exact:true}).waitFor();await page.getByRole('button',{name:'Account',exact:true}).click();
  await page.locator('#profile-photo-heading').waitFor();
  if(statusFailure)await page.getByRole('alert').waitFor();else await page.getByRole('button',{name:initial==='ready'?'Remove photo':'Choose a photo',exact:true}).waitFor();
  return {page,state,close:async()=>{assert.deepEqual(state.errors,[]);assert.deepEqual(state.unexpected,[]);await context.close();}};
@@ -79,6 +82,19 @@ async function accessibility(page,label){await page.addScriptTag({content:axe});
 async function capture(page,label){const top=()=>page.evaluate(async()=>{window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});await top();await page.screenshot({path:`${out}/${label}.png`,fullPage:true,animations:'disabled'});await top();await page.screenshot({path:`${out}/${label}-viewport.png`,fullPage:false,animations:'disabled'});}
 async function test(name,run){if(nameFilter&&!name.includes(nameFilter))return;try{await run();results.push({name,status:'passed'});console.log('PASS '+name);}catch(e){results.push({name,status:'failed',error:String(e)});throw e;}finally{writeFileSync(`${out}/${nameFilter?'results-focused':'results'}.json`,JSON.stringify(results,null,2));}}
 try{
+ await test('claimed ledger identities load only authenticated photos and pending people never request a photo',async()=>{
+  const f=await fixture('empty',{withParticipants:true});
+  await f.page.getByRole('button',{name:'Pact home',exact:true}).click();
+  await f.page.getByRole('button',{name:'People & trips',exact:true}).click();
+  await f.page.getByRole('heading',{name:'Their places are waiting',exact:true}).waitFor();
+  await f.page.getByText('Invited',{exact:true}).waitFor();
+  assert.ok(f.state.photoReads.length>0);
+  assert.ok(f.state.photoReads.every(id=>id==='00000000-0000-4000-8000-000000000001'),'all photo requests use the linked authenticated account');
+  assert.equal(f.state.photoReads.includes(f.state.claimedId),false);
+  assert.equal(f.state.photoReads.includes(f.state.waitingId),false);
+  assert.equal(f.state.uploads.length+f.state.deletes.length,0);
+  await f.close();
+ });
  await test('account layout keeps profile, photo and settings reachable at phone and tablet widths in both themes',async()=>{
   const f=await fixture('empty',{displayName:'Alex Morgan'});
   for(const scheme of ['light','dark']){
